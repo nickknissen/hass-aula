@@ -6,3 +6,7 @@ venv
 .idea
 .storage
 .DS_Store
+skoleskema.json
+# Home Assistant configuration
+config/*
+!config/configuration.yaml
