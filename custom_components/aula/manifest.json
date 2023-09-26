@@ -15,5 +15,8 @@
         "beautifulsoup4",
         "lxml"
     ],
-    "version": "0.1.34"
+    "version": "0.1.34",
+    "loggers": [
+        "custom_components.aula"
+    ]
 }
