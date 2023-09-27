@@ -7,7 +7,7 @@ import requests
 import datetime
 from bs4 import BeautifulSoup
 import json, re
-from .const import API, API_VERSION, MIN_UDDANNELSE_API, MEEBOOK_API, SYSTEMATIC_API
+from .const import API, API_VERSION, MIN_UDDANNELSE_API, MEEBOOK_API, SYSTEMATIC_API, Widget
 from homeassistant.exceptions import ConfigEntryNotReady
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class Client:
         while success == False and redirects < 10:
             html = BeautifulSoup(response.text, 'lxml')
             url = html.form['action']
-            
+
             post_data = {}
             for input in html.find_all('input'):
                 if(input.has_attr('name') and input.has_attr('value')):
@@ -128,15 +128,15 @@ class Client:
             self.widgets[widgetid] = widgetname
         _LOGGER.debug("Widgets found: "+str(self.widgets))
 
-    def get_token(self,widgetid,mock=False):
-        _LOGGER.debug("Requesting token for widget "+widgetid)
+    def get_token(self, widget: Widget, mock=False):
+        _LOGGER.debug("Requesting token for widget: %s", widget.name)
         if mock:
             return "MockToken"
-        self._bearertoken = self._session.get(self.apiurl + "?method=aulaToken.getAulaToken&widgetId="+widgetid, verify=True).json()["data"]
-        token = "Bearer "+str(self._bearertoken)
-        self.tokens[widgetid] = token
+        self._bearertoken = self._session.get(self.apiurl + "?method=aulaToken.getAulaToken&widgetId="+widget.value, verify=True).json()["data"]
+        token = f"Bearer {self._bearertoken}"
+        self.tokens[widget] = token
         return token
-        
+
     def update_data(self):
         is_logged_in = False
         if self._session:
@@ -167,7 +167,7 @@ class Client:
         _LOGGER.debug("Child ids and names: "+str(self._childnames))
         _LOGGER.debug("Child ids and institution names: "+str(self._institutions))
         _LOGGER.debug("Institution codes: "+str(self._institutionProfiles))
-        
+
         self._daily_overview = {}
         for i, child in enumerate(self._children):
             response = self._session.get(self.apiurl + "?method=presence.getDailyOverview&childIds[]=" + str(child["id"]), verify=True).json()
@@ -246,17 +246,18 @@ class Client:
         if self._ugeplan == True:
             guardian = self._session.get(self.apiurl + "?method=profiles.getProfileContext&portalrole=guardian", verify=True).json()["data"]["userId"]
             childUserIds = ",".join(self._childuserids)
-            
+
             if len(self.widgets) == 0:
                 self.get_widgets()
-            if not "0029" in self.widgets and not "0004" in self.widgets and not "0062" in self.widgets:
+
+            if not Widget.MinUddannelseSchedule in self.widgets and not Widget.MeebookSchedule in self.widgets and not Widget.SystematicTodo in self.widgets:
                 _LOGGER.error("You have enabled ugeplaner, but we cannot find any matching widgets (0029,0004) in Aula.")
-            if "0029" in self.widgets and "0004" in self.widgets:
+            if Widget.MinUddannelseSchedule in self.widgets and Widget.MeebookSchedule in self.widgets:
                 _LOGGER.warning("Multiple sources for ugeplaner is untested and might cause problems.")
 
             def ugeplan(week,thisnext):
-                if "0029" in self.widgets:
-                    token = self.get_token("0029")
+                if Widget.MinUddannelseSchedule in self.widgets:
+                    token = self.get_token(Widget.MinUddannelseSchedule)
                     get_payload = '/ugebrev?assuranceLevel=2&childFilter='+childUserIds+'&currentWeekNumber='+week+'&isMobileApp=false&placement=narrow&sessionUUID='+guardian+'&userProfile=guardian'
                     ugeplaner = requests.get(MIN_UDDANNELSE_API + get_payload, headers={"Authorization":token, "accept":"application/json"}, verify=True)
                     #_LOGGER.debug("ugeplaner status_code "+str(ugeplaner.status_code))
@@ -268,9 +269,9 @@ class Client:
                         elif thisnext == "next":
                             self.ugepnext_attr[person["navn"].split()[0]] = ugeplan
 
-                if "0062" in self.widgets:
+                if Widget.SystematicTodo in self.widgets:
                     _LOGGER.debug("In the Huskelisten flow...")
-                    token = self.get_token("0062", False)
+                    token = self.get_token(Widget.SystematicTodo, False)
                     huskelisten_headers = {
                         "Accept": "application/json, text/plain, */*",
                         "Accept-Encoding": "gzip, deflate, br",
@@ -324,12 +325,12 @@ class Client:
                         else:
                             huskel = huskel+str(name)+" har ingen påmindelser."
                         self.huskeliste[name] = huskel
-                       
+
                 # End Huskelisten
-                if "0004" in self.widgets:
+                if Widget.MeebookSchedule in self.widgets:
                     # Try Meebook:
                     _LOGGER.debug("In the Meebook flow...")
-                    token = self.get_token("0004")
+                    token = self.get_token(Widget.MeebookSchedule)
                     #_LOGGER.debug("Token "+token)
                     headers = {
                         "authority": "app.meebook.com",
@@ -345,7 +346,7 @@ class Client:
                     childFilter = "&childFilter[]=".join(self._childuserids)
                     institutionFilter = "&institutionFilter[]=".join(self._institutionProfiles)
                     get_payload = '/relatedweekplan/all?currentWeekNumber='+week+'&userProfile=guardian&childFilter[]='+childFilter+'&institutionFilter[]='+institutionFilter
-                    
+
                     mock_meebook = 0
                     if mock_meebook == 1:
                         _LOGGER.warning("Using mock data for Meebook ugeplaner.")
@@ -355,7 +356,7 @@ class Client:
                         response = requests.get(MEEBOOK_API + get_payload, headers=headers, verify=True)
                         data = json.loads(response.text, strict=False)
                         #_LOGGER.debug("Meebook ugeplan raw response from week "+week+": "+str(response.text))
-                    
+
                     for person in data:
                         _LOGGER.debug("Meebook ugeplan for "+person["name"])
                         ugep = ''

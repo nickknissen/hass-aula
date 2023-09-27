@@ -1,7 +1,7 @@
 """
 Based on https://github.com/JBoye/HA-Aula
 """
-from .const import DOMAIN
+from .const import DOMAIN, Widget
 import logging
 from datetime import datetime, timedelta
 from homeassistant.helpers.entity import Entity
@@ -36,7 +36,7 @@ async def async_setup_entry(
     #from .client import Client
     client  = Client(config[CONF_USERNAME], config[CONF_PASSWORD],config[CONF_SCHOOLSCHEDULE],config[CONF_UGEPLAN])
     hass.data[DOMAIN]["client"] = client
-    
+
 
     async def async_update_data():
         client = hass.data[DOMAIN]["client"]
@@ -52,7 +52,7 @@ async def async_setup_entry(
 
     # Immediate refresh
     await coordinator.async_request_refresh()
-    
+
     entities = []
     client = hass.data[DOMAIN]["client"]
     await hass.async_add_executor_job(client.update_data)
@@ -128,7 +128,7 @@ class AulaSensor(Entity):
         #_LOGGER.debug("Dump of ugep_attr: "+str(self._client.ugep_attr))
         #_LOGGER.debug("Dump of ugepnext_attr: "+str(self._client.ugepnext_attr))
         if ugeplan:
-            if "0062" in self._client.widgets:
+            if Widget.SystematicTodo in self._client.widgets:
                 try:
                     attributes["huskelisten"] = self._client.huskeliste[self._child["name"].split()[0]]
                 except:
@@ -169,7 +169,7 @@ class AulaSensor(Entity):
         unique_id = "aula"+str(self._child["id"])
         _LOGGER.debug("Unique ID for child "+str(self._child["id"])+" "+unique_id)
         return unique_id
-    
+
     @property
     def icon(self):
         return 'mdi:account-school'
