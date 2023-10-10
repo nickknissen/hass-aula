@@ -22,20 +22,21 @@ async def async_setup_entry(
     config = hass.data[DOMAIN][config_entry.entry_id]
     if config_entry.options:
         config.update(config_entry.options)
-    from .client import Client
-    if not config[CONF_SCHOOLSCHEDULE] == True:
+
+    if not config[CONF_SCHOOLSCHEDULE]:
         return True
+
     client = hass.data[DOMAIN]["client"]
     calendar_devices = []
     calendar = []
     for i, child in enumerate(client._children):
         childid = child["id"]
         name = child["name"]
-        calendar_devices.append(CalendarDevice(hass,calendar,name,childid))
+        calendar_devices.append(CalendarDevice(hass, calendar, name, childid))
     async_add_entities(calendar_devices)
 
 class CalendarDevice(CalendarEntity):
-    def __init__(self,hass,calendar,name,childid):
+    def __init__(self,hass, calendar, name, childid):
         self.data = CalendarData(hass,calendar,childid)
         self._cal_data = {}
         self._name = "Skoleskema "+name
@@ -60,7 +61,7 @@ class CalendarDevice(CalendarEntity):
     def update(self):
         """Update all Calendars."""
         self.data.update()
-        
+
     async def async_get_events(self, hass, start_date, end_date):
         """Get all events in a specific time frame."""
         return await self.data.async_get_events(hass, start_date, end_date)
@@ -114,6 +115,8 @@ class CalendarData:
                     end = end,
                 )
                 events.append(event)
+
+        _LOGGER.debug("Completed parsing of skoleskema.json")
         return events
 
     async def async_get_events(self, hass, start_date, end_date):

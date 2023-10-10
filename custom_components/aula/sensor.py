@@ -34,9 +34,13 @@ async def async_setup_entry(
     if config_entry.options:
         config.update(config_entry.options)
     #from .client import Client
-    client  = Client(config[CONF_USERNAME], config[CONF_PASSWORD],config[CONF_SCHOOLSCHEDULE],config[CONF_UGEPLAN])
+    client  = Client(
+        config[CONF_USERNAME],
+        config[CONF_PASSWORD],
+        config[CONF_SCHOOLSCHEDULE],
+        config[CONF_UGEPLAN]
+    )
     hass.data[DOMAIN]["client"] = client
-
 
     async def async_update_data():
         client = hass.data[DOMAIN]["client"]

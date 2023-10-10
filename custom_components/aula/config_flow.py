@@ -16,30 +16,27 @@ _LOGGER = logging.getLogger(__name__)
 
 AUTH_SCHEMA = vol.Schema(
     {
-            vol.Required(CONF_USERNAME): cv.string, vol.Required(CONF_PASSWORD): cv.string, vol.Optional("schoolschedule"): cv.boolean,vol.Optional("ugeplan"): cv.boolean
+        vol.Required(CONF_USERNAME): cv.string,
+        vol.Required(CONF_PASSWORD): cv.string,
+        vol.Optional(CONF_SCHOOLSCHEDULE): cv.boolean,
+        vol.Optional(CONF_UGEPLAN): cv.boolean,
     }
 )
 
+
 class AulaCustomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Aula Custom config flow."""
+
     data: Optional[Dict[str, Any]]
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
         """Invoked when a user initiates a flow via the user interface."""
         errors: Dict[str, str] = {}
+
         if user_input is not None:
             self.data = user_input
-            _LOGGER.debug(user_input.get("schoolschedule"))
-            if user_input.get("schoolschedule") == None:
-                self.data[CONF_SCHOOLSCHEDULE] = False
-            else:
-                self.data[CONF_SCHOOLSCHEDULE] = user_input.get("schoolschedule")
-            _LOGGER.debug(user_input.get("ugeplan"))
-            if user_input.get("ugeplan") == None:
-                self.data[CONF_UGEPLAN] = False
-            else:
-                self.data[CONF_UGEPLAN] = user_input.get("ugeplan")
-            # This will log password in plain text: _LOGGER.debug(self.data)
+            self.data[CONF_SCHOOLSCHEDULE] = user_input.get(CONF_SCHOOLSCHEDULE, False)
+            self.data[CONF_UGEPLAN] = user_input.get(CONF_UGEPLAN, False)
             return self.async_create_entry(title="Aula", data=self.data)
 
         return self.async_show_form(

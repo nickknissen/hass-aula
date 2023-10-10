@@ -19,7 +19,7 @@ class Client:
     widgets = {}
     tokens = {}
 
-    def __init__(self, username, password, schoolschedule, ugeplan):
+    def __init__(self, username: str, password: str, schoolschedule: bool, ugeplan: bool):
         self._username = username
         self._password = password
         self._session = None
@@ -96,7 +96,7 @@ class Client:
         self.apiurl = API+API_VERSION
         apiver = int(API_VERSION)
         api_success = False
-        while api_success == False:
+        while not api_success:
             _LOGGER.debug("Trying API at "+self.apiurl)
             ver = self._session.get(self.apiurl + "?method=profiles.getProfilesByLogin", verify=True)
             if ver.status_code == 410:
@@ -242,8 +242,22 @@ class Client:
                _LOGGER.warn("Got the following reply when trying to fetch calendars: "+str(res.text))
         # End of calendar
 
+
+        if Widget.MinUddannelseTasks:
+            token = self.get_token(Widget.MinUddannelseTasks)
+            guardian = self._session.get(self.apiurl + "?method=profiles.getProfileContext&portalrole=guardian", verify=True).json()["data"]["userId"]
+
+            year, week, _ = datetime.datetime.now().isocalendar()
+            year_week_str = f"{year}-W{week:02d}"
+            childUserIds = ",".join(self._childuserids)
+
+            url = f"{MIN_UDDANNELSE_API}/opgaveliste?placement=narrow&sessionUUID={guardian}&userProfile=guardian&currentWeekNumber={year_week_str}&childFilter[]={childUserIds}&isMobileApp=false"
+            weekTasks = requests.get(url, headers={"Authorization":token, "accept":"application/json"}, verify=True)
+            _LOGGER.debug("opgaveliste response %s", weekTasks.json())
+
+
         # Ugeplaner:
-        if self._ugeplan == True:
+        if self._ugeplan:
             guardian = self._session.get(self.apiurl + "?method=profiles.getProfileContext&portalrole=guardian", verify=True).json()["data"]["userId"]
             childUserIds = ",".join(self._childuserids)
 
@@ -255,13 +269,13 @@ class Client:
             if Widget.MinUddannelseSchedule in self.widgets and Widget.MeebookSchedule in self.widgets:
                 _LOGGER.warning("Multiple sources for ugeplaner is untested and might cause problems.")
 
-            def ugeplan(week,thisnext):
+            def ugeplan(week, thisnext):
                 if Widget.MinUddannelseSchedule in self.widgets:
                     token = self.get_token(Widget.MinUddannelseSchedule)
                     get_payload = '/ugebrev?assuranceLevel=2&childFilter='+childUserIds+'&currentWeekNumber='+week+'&isMobileApp=false&placement=narrow&sessionUUID='+guardian+'&userProfile=guardian'
                     ugeplaner = requests.get(MIN_UDDANNELSE_API + get_payload, headers={"Authorization":token, "accept":"application/json"}, verify=True)
                     #_LOGGER.debug("ugeplaner status_code "+str(ugeplaner.status_code))
-                    #_LOGGER.debug("ugeplaner response "+str(ugeplaner.text))
+                    #_LOGGER.debug("Ugeplaner response %s ", ugeplaner.json())
                     for person in ugeplaner.json()["personer"]:
                         ugeplan = person["institutioner"][0]["ugebreve"][0]["indhold"]
                         if thisnext == "this":
