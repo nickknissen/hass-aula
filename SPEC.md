@@ -1,329 +1,333 @@
-# hass-aula: Home Assistant Integration for Aula.dk
+# hass-aula — Product Spec
 
-## Product Spec
-
-### Overview
-
-A Home Assistant custom integration for **Aula** — the Danish school communication
-platform (aula.dk). This integration wraps the
-[`aula`](https://pypi.org/project/aula/) Python library (v0.1.1+) to surface
-school-related data — child presence, calendar events, messages, posts, homework
-tasks, and library loans — as native Home Assistant entities.
-
-**Domain:** `aula`
-**IoT class:** `cloud_polling`
-**Minimum HA version:** 2025.2.4
-**HACS compatible:** Yes
+Home Assistant custom integration for [Aula](https://aula.dk), the Danish
+school and daycare communication platform. Wraps the
+[`aula`](https://pypi.org/project/aula/) Python library (v0.1.1+).
 
 ---
 
-### Target Users
+## 1. Problem
 
-Parents (guardians) in Denmark whose children attend schools using Aula. The
-integration lets them:
+Danish parents use Aula daily to check whether their child has arrived at
+school/daycare, read messages from teachers, track homework, and keep up with
+the school calendar. All of this lives behind a web portal that requires MitID
+(Denmark's national identity) to log in.
 
-- See at a glance whether their child has arrived at school
-- Get upcoming school events in the HA calendar
-- Track unread messages and new posts
-- Monitor homework tasks and library book due dates
-- Build automations around school events (e.g., notify when child checks in)
+There is no way to surface this information in a smart-home dashboard, build
+automations around school events, or get push notifications when a child checks
+in — unless you build a custom integration.
 
----
+## 2. Users
 
-## Authentication
+Parents (guardians) in Denmark whose children attend institutions using Aula.
+Typical household has 1–3 children across 1–2 institutions (e.g. a daycare and
+a school).
 
-### The MitID Challenge
+## 3. Goals
 
-Aula authenticates via Denmark's national **MitID** identity system. This is an
-interactive flow requiring QR-code scanning or app approval — it cannot be reduced
-to a simple username/password form.
+- **At-a-glance status**: Is my child at school right now? When did they arrive?
+- **Calendar in HA**: See the school schedule alongside the family calendar.
+- **Message awareness**: Know when new messages arrive without opening Aula.
+- **Homework tracking**: Surface upcoming tasks on the family dashboard.
+- **Automation hooks**: Trigger actions on presence changes, new messages, or
+  upcoming events (e.g. "notify me when my child checks in at daycare").
 
-### Strategy: Two-Phase Setup
+## 4. Non-Goals (for now)
 
-#### Phase 1 — Initial Token Acquisition (Config Flow)
-
-1. User enters their **MitID username** in the HA config flow.
-2. The integration calls `authenticate_and_create_client()` from the `aula`
-   library, providing a custom `TokenStorage` backend.
-3. The config flow transitions to a **QR code step** that displays the MitID QR
-   codes via the `on_qr_codes` callback. The user scans with their MitID app.
-4. On successful authentication, the integration receives an access token,
-   refresh token, and session cookies.
-5. Tokens are persisted using a Home Assistant–native `TokenStorage`
-   implementation backed by `hass.data` + config entry storage (not the
-   filesystem).
-
-#### Phase 2 — Ongoing Token Refresh
-
-- The `aula` library supports **token refresh** via
-  `MitIDAuthClient.refresh_access_token()`.
-- The coordinator attempts a silent token refresh before each data poll.
-- If the refresh token itself has expired (long inactivity), the integration
-  raises `ConfigEntryAuthFailed`, prompting the user to re-authenticate through
-  the config flow reauth step.
-
-### Config Flow Steps
-
-| Step              | Fields                     | Description                                            |
-|-------------------|----------------------------|--------------------------------------------------------|
-| `user`            | `mitid_username`           | MitID username input                                   |
-| `qr_code`         | *(display only)*           | Shows QR codes for MitID app approval                  |
-| `reauth_confirm`  | `mitid_username`           | Re-authentication when tokens fully expire              |
-
-### Token Storage Implementation
-
-```python
-class HATokenStorage(TokenStorage):
-    """Store Aula tokens in HA config entry data."""
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None: ...
-
-    async def load(self) -> dict[str, Any] | None:
-        # Read from entry.data["tokens"]
-
-    async def save(self, data: dict[str, Any]) -> None:
-        # Write to entry.data["tokens"] via
-        # hass.config_entries.async_update_entry()
-```
+- **Write operations**: No sending messages, marking tasks complete, or
+  reporting absence. The `aula` library is read-only and so is this integration.
+- **Gallery / media browsing**: The library supports downloading gallery images,
+  but surfacing them as an HA media source is out of scope for the MVP.
+- **Multiple guardian roles**: The integration assumes a `guardian` role. Teacher
+  or employee roles are not supported.
 
 ---
 
-## Architecture
+## 5. Authentication
 
-### Integration Data Flow
+### The MitID challenge
 
-```
-MitID Auth ──► aula library ──► AulaApiClient
-                                     │
-                     ┌───────────────┼───────────────┐
-                     ▼               ▼               ▼
-              AulaPresence     AulaCalendar     AulaMessages
-              Coordinator      Coordinator      Coordinator
-                     │               │               │
-                     ▼               ▼               ▼
-               sensor.*       calendar.*        sensor.*
-             binary_sensor.*                    todo.*
-```
+Aula authenticates through Denmark's MitID system. This is an interactive
+multi-step flow:
 
-### HTTP Client Adapter
+1. User provides their MitID username.
+2. The Aula login redirects through a SAML broker to MitID.
+3. MitID presents **two QR codes** that the user scans with the MitID app.
+4. After app approval, an OAuth 2.0 code exchange yields access + refresh tokens.
 
-The `aula` library defines an `HttpClient` protocol. The integration provides an
-**aiohttp-based implementation** that reuses Home Assistant's
-`async_get_clientsession()`, ensuring proper connection pooling and SSL handling.
+This cannot be reduced to a username/password form. The integration must handle
+the interactive QR-code step during setup.
 
-```python
-class AiohttpAulaClient(HttpClient):
-    """Adapts HA's aiohttp session to the aula HttpClient protocol."""
+### Token lifecycle
 
-    def __init__(self, session: aiohttp.ClientSession) -> None: ...
+The `aula` library's `authenticate_and_create_client()` function manages the
+full lifecycle:
 
-    async def request(self, method, url, *, headers, params, json) -> HttpResponse: ...
-    async def download_bytes(self, url: str) -> bytes: ...
-    def get_cookie(self, name: str) -> str | None: ...
-    async def close(self) -> None: ...
-```
+| Scenario | Behavior |
+|----------|----------|
+| First setup | Full MitID flow with QR codes |
+| Tokens cached and valid | Reuse immediately — no user interaction |
+| Access token expired, refresh token valid | Silent refresh — no user interaction |
+| Refresh token expired | Re-trigger full MitID flow (reauth) |
 
-> **Note:** The `aula` library ships with `HttpxHttpClient` (httpx-based). For the
-> initial release we can use the bundled httpx client directly rather than writing
-> an aiohttp adapter. The aiohttp adapter is a future optimization to align with
-> HA best practices. The `HttpClient` protocol makes this swap transparent.
+Tokens include: `access_token`, `refresh_token`, `expires_at`, plus HTTP
+cookies required for the Aula session.
 
-### Data Coordinators
+### Config flow design
 
-| Coordinator          | Update Interval | API Calls                                            |
-|----------------------|-----------------|------------------------------------------------------|
-| `AulaPresenceCoordinator`  | 5 minutes   | `get_daily_overview()` per child                    |
-| `AulaCalendarCoordinator`  | 30 minutes  | `get_calendar_events()` (rolling 14-day window)      |
-| `AulaMessagesCoordinator`  | 15 minutes  | `get_message_threads()`                              |
-| `AulaPostsCoordinator`     | 30 minutes  | `get_posts()`                                        |
-| `AulaTasksCoordinator`     | 60 minutes  | `get_mu_tasks()` (current week)                      |
+| Step | What the user sees |
+|------|--------------------|
+| **`user`** | Text field: MitID username |
+| **`qr_code`** | Two QR codes rendered as images. User scans with MitID app and approves. The flow blocks until MitID completes or times out. |
+| **`reauth_confirm`** | Shown when tokens fully expire. Same flow as initial setup. |
 
-Each coordinator extends `DataUpdateCoordinator` and shares a single
-`AulaApiClient` instance stored in `hass.data[DOMAIN][entry.entry_id]`.
+**Token storage**: Tokens and cookies are persisted in the config entry's `data`
+dict (encrypted at rest by HA). A custom `TokenStorage` subclass bridges the
+`aula` library's storage protocol to `hass.config_entries.async_update_entry()`.
 
-All coordinators handle:
-- `HttpRequestError` → `UpdateFailed`
-- Auth failures → `ConfigEntryAuthFailed` (triggers reauth flow)
-
-### Integration Setup (`__init__.py`)
-
-```python
-PLATFORMS = [
-    Platform.BINARY_SENSOR,
-    Platform.CALENDAR,
-    Platform.SENSOR,
-    Platform.TODO,
-]
-
-async def async_setup_entry(hass, entry):
-    # 1. Create token storage backed by config entry
-    # 2. Authenticate / refresh tokens via aula library
-    # 3. Fetch profile + children list
-    # 4. Create shared AulaApiClient
-    # 5. Create coordinators, trigger first refresh
-    # 6. Forward entry setup to platforms
-```
+**QR code rendering**: The `aula` library provides two `qrcode.QRCode` objects
+via the `on_qr_codes` callback. The config flow renders these as base64-encoded
+PNG data URIs in a markdown description placeholder. This is a static image —
+the QR codes don't change once generated.
 
 ---
 
-## Entities
+## 6. Entities
 
-### Per-Child Entities
+### Device model
 
-Each child in the profile generates the following entities. The entity unique ID
-is `aula_{child_id}_{entity_type}`.
+Each **child** is represented as a Home Assistant **device**:
 
-#### 1. Presence Sensor
+| Field | Value |
+|-------|-------|
+| Identifiers | `{(DOMAIN, child.id)}` |
+| Name | Child's display name |
+| Manufacturer | `Aula` |
+| Model | Institution name (e.g. "Skovbørnehaven") |
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `sensor`                                       |
-| **Name**        | `{child_name} Presence`                        |
-| **Device class**| —                                              |
-| **State**       | `PresenceState` display name (e.g., "Present", "Sick", "Not present") |
-| **Attributes**  |                                                |
-|                 | `location` — current location string           |
-|                 | `check_in_time` — today's check-in time        |
-|                 | `check_out_time` — today's check-out time      |
-|                 | `entry_time` — planned entry time              |
-|                 | `exit_time` — planned exit time                |
-|                 | `exit_with` — who the child leaves with        |
-|                 | `comment` — daily comment                      |
-|                 | `institution` — institution name               |
-|                 | `main_group` — class/group name                |
-| **Icon**        | `mdi:school`                                   |
+All per-child entities are grouped under the child's device.
 
-#### 2. Present at School Binary Sensor
+### 6.1 Presence sensor (per child)
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `binary_sensor`                                |
-| **Name**        | `{child_name} At School`                       |
-| **Device class**| `presence`                                     |
-| **State**       | `on` when `PresenceState` is `PRESENT`, `FIELDTRIP`, `SPARE_TIME_ACTIVITY`, or `SLEEPING`; `off` otherwise |
-| **Attributes**  | Same as presence sensor                        |
-| **Icon**        | `mdi:school`                                   |
+Shows the child's current presence status at school/daycare.
 
-#### 3. Calendar
+| | |
+|-|-|
+| **Platform** | `sensor` |
+| **Unique ID** | `aula_{child.id}_presence` |
+| **Name** | `{child.name} Presence` |
+| **State** | One of: `Not present`, `Sick`, `Reported absent`, `Present`, `Field trip`, `Sleeping`, `Spare time activity`, `Physical placement`, `Checked out` |
+| **Icon** | `mdi:school` |
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `calendar`                                     |
-| **Name**        | `{child_name} School Calendar`                 |
-| **Events**      | From `get_calendar_events()` with 14-day lookahead |
-| **Event fields**|                                                |
-|                 | `summary` → `event.title`                     |
-|                 | `start` → `event.start_datetime`               |
-|                 | `end` → `event.end_datetime`                   |
-|                 | `location` → `event.location`                  |
-|                 | `description` → teacher/substitute info         |
+**Attributes:**
 
-#### 4. Homework Tasks (Todo List)
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `status_code` | int | Raw `PresenceState` enum value (0–8) |
+| `location` | str \| None | Current location text |
+| `check_in_time` | str \| None | Actual check-in time today |
+| `check_out_time` | str \| None | Actual check-out time today |
+| `entry_time` | str \| None | Planned/expected entry time |
+| `exit_time` | str \| None | Planned/expected exit time |
+| `exit_with` | str \| None | Name of person picking up the child |
+| `comment` | str \| None | Staff comment for the day |
+| `institution` | str \| None | Institution name |
+| `main_group` | str \| None | Class or group name (e.g. "3.A") |
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `todo`                                         |
-| **Name**        | `{child_name} Homework`                        |
-| **Items**       | From `get_mu_tasks()` for current week         |
-| **Item fields** |                                                |
-|                 | `summary` → `task.title`                       |
-|                 | `due` → `task.due_date`                        |
-|                 | `status` → mapped from `task.is_completed`     |
-|                 | `description` → course name + classes          |
-| **Note**        | Read-only; tasks cannot be completed from HA   |
+**Data source**: `AulaApiClient.get_daily_overview(child_id=child.id)`
 
-### Per-Account Entities
+### 6.2 At-school binary sensor (per child)
 
-These entities are created once per config entry (Aula account).
+Simplified yes/no: is the child physically at the institution?
 
-#### 5. Unread Messages Sensor
+| | |
+|-|-|
+| **Platform** | `binary_sensor` |
+| **Unique ID** | `aula_{child.id}_at_school` |
+| **Name** | `{child.name} At School` |
+| **Device class** | `presence` |
+| **State** | `on` if presence status is `Present`, `Field trip`, `Sleeping`, or `Spare time activity`. `off` otherwise. |
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `sensor`                                       |
-| **Name**        | `Aula Unread Messages`                         |
-| **Device class**| —                                              |
-| **State class** | `measurement`                                  |
-| **State**       | Count of message threads (int)                 |
-| **Attributes**  |                                                |
-|                 | `threads` — list of `{subject, thread_id}`     |
-| **Icon**        | `mdi:email`                                    |
+This is the primary entity for automations ("notify me when my child arrives").
 
-#### 6. Latest Post Sensor
+### 6.3 School calendar (per child)
 
-| Property        | Value                                          |
-|-----------------|------------------------------------------------|
-| **Platform**    | `sensor`                                       |
-| **Name**        | `Aula Latest Post`                             |
-| **State**       | Title of the most recent post                  |
-| **Attributes**  |                                                |
-|                 | `content` — plain text body (truncated)        |
-|                 | `author` — post owner display name             |
-|                 | `timestamp` — publish timestamp                |
-|                 | `is_important` — boolean                       |
-|                 | `comment_count` — number of comments           |
-| **Icon**        | `mdi:bulletin-board`                           |
+Native HA calendar entity showing the child's school schedule.
 
-### Device Registry
+| | |
+|-|-|
+| **Platform** | `calendar` |
+| **Unique ID** | `aula_{child.id}_calendar` |
+| **Name** | `{child.name} School Calendar` |
 
-Each **child** is registered as a HA **device**:
+**Event mapping:**
 
-| Property         | Value                                         |
-|------------------|-----------------------------------------------|
-| `identifiers`    | `{(DOMAIN, child_id)}`                        |
-| `name`           | Child's name                                  |
-| `manufacturer`   | `Aula`                                        |
-| `model`          | Institution name                              |
-| `sw_version`     | `aula` library version                        |
+| HA CalendarEvent field | Source |
+|------------------------|--------|
+| `summary` | `event.title` |
+| `start` | `event.start_datetime` |
+| `end` | `event.end_datetime` |
+| `location` | `event.location` |
+| `description` | `"Teacher: {teacher_name}"` and/or `"Substitute: {substitute_name}"` if applicable |
+
+The calendar entity implements `async_get_events()` for the HA calendar panel,
+fetching events for the requested date range on demand.
+
+**Data source**: `AulaApiClient.get_calendar_events(institution_profile_ids, start, end)`
+
+### 6.4 Unread messages sensor (per account)
+
+| | |
+|-|-|
+| **Platform** | `sensor` |
+| **Unique ID** | `aula_{profile.profile_id}_messages` |
+| **Name** | `Aula Messages` |
+| **State** | Number of message threads (int) |
+| **State class** | `measurement` |
+| **Icon** | `mdi:email` |
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `threads` | list[dict] | Up to 10 most recent threads: `{subject, thread_id}` |
+
+**Data source**: `AulaApiClient.get_message_threads()`
+
+### 6.5 Latest post sensor (per account)
+
+| | |
+|-|-|
+| **Platform** | `sensor` |
+| **Unique ID** | `aula_{profile.profile_id}_latest_post` |
+| **Name** | `Aula Latest Post` |
+| **State** | Title of the most recent post (truncated to 255 chars) |
+| **Icon** | `mdi:bulletin-board` |
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `content` | str | Plain-text body (truncated to 1024 chars) |
+| `author` | str | Post owner's full name |
+| `timestamp` | datetime \| None | Publish timestamp |
+| `is_important` | bool | Whether the post is flagged as important |
+| `comment_count` | int | Number of comments |
+
+**Data source**: `AulaApiClient.get_posts(institution_profile_ids, limit=1)`
+
+### 6.6 Homework todo list (per child)
+
+Read-only todo list showing Min Uddannelse tasks for the current week.
+
+| | |
+|-|-|
+| **Platform** | `todo` |
+| **Unique ID** | `aula_{child.id}_homework` |
+| **Name** | `{child.name} Homework` |
+
+**Item mapping:**
+
+| TodoItem field | Source |
+|----------------|--------|
+| `uid` | `task.id` |
+| `summary` | `task.title` |
+| `due` | `task.due_date` |
+| `status` | `completed` if `task.is_completed`, else `needs_action` |
+| `description` | Course name and class/subject info |
+
+This entity is **read-only** — `TodoListEntity.supported_features` does not
+include create/update/delete.
+
+**Data source**: `AulaApiClient.get_mu_tasks(widget_id, child_filter, institution_filter, week, session_uuid)`
+
+> **Note**: Widget API calls require a `session_uuid` obtained from
+> `get_profile_context()` and a per-widget bearer token obtained internally by
+> the library. This is handled transparently by the coordinator.
 
 ---
 
-## Configuration Options (Options Flow)
+## 7. Data Coordinators
 
-After initial setup, users can configure:
+Each data source gets its own `DataUpdateCoordinator` to allow independent
+polling intervals and error isolation.
 
-| Option                  | Type    | Default | Description                              |
-|-------------------------|---------|---------|------------------------------------------|
-| `update_interval_presence` | int  | 5       | Presence polling interval (minutes)      |
-| `update_interval_calendar` | int  | 30      | Calendar polling interval (minutes)      |
-| `update_interval_messages` | int  | 15      | Messages polling interval (minutes)      |
-| `calendar_lookahead_days`  | int  | 14      | Days ahead to fetch calendar events      |
+| Coordinator | Interval | Feeds entities | API methods called |
+|-------------|----------|----------------|-------------------|
+| **Presence** | 5 min | Presence sensor, At-school binary sensor | `get_daily_overview()` per child |
+| **Calendar** | 30 min | School calendar | `get_calendar_events()` (14-day rolling window) |
+| **Messages** | 15 min | Unread messages sensor | `get_message_threads()` |
+| **Posts** | 30 min | Latest post sensor | `get_posts(limit=10)` |
+| **Tasks** | 60 min | Homework todo list | `get_mu_tasks()` per child (current week) |
+
+All coordinators share a single `AulaApiClient` instance.
+
+**Error handling:**
+
+| Error | Coordinator behavior |
+|-------|---------------------|
+| `HttpRequestError` (network/server) | Raise `UpdateFailed` — HA retries next interval |
+| HTTP 401/403 | Raise `ConfigEntryAuthFailed` — HA shows reauth prompt |
+| Token refresh fails | Raise `ConfigEntryAuthFailed` |
+| No data for child | Return `None` — entity becomes `unavailable` |
 
 ---
 
-## Error Handling
+## 8. Integration Setup Flow
 
-| Scenario                        | Behavior                                           |
-|---------------------------------|----------------------------------------------------|
-| Network error during poll       | `UpdateFailed` — HA retries on next interval       |
-| HTTP 401/403 from Aula API      | `ConfigEntryAuthFailed` — triggers reauth flow     |
-| Token refresh fails             | `ConfigEntryAuthFailed` — triggers reauth flow     |
-| MitID auth timeout/cancelled    | Config flow shows error, user can retry            |
-| Child not found in daily overview | Entity state becomes `unavailable`               |
+When a config entry loads:
+
+1. **Restore tokens** from config entry data.
+2. **Create client**: Call `authenticate_and_create_client()` with stored tokens.
+   If tokens are valid, this returns immediately with no user interaction. If
+   refresh is needed, it happens silently.
+3. **Fetch profile**: `client.get_profile()` → get children list and all
+   institution profile IDs.
+4. **Fetch profile context**: `client.get_profile_context()` → get
+   `session_uuid` needed for widget APIs.
+5. **Store runtime data** in `hass.data[DOMAIN][entry_id]`: the client, profile,
+   children list, session UUID.
+6. **Create coordinators** and trigger initial refresh.
+7. **Forward** to entity platforms.
+
+### Unload
+
+On entry unload: cancel all coordinator timers, close the `AulaApiClient`
+(which closes the underlying HTTP client).
 
 ---
 
-## File Structure
+## 9. Configuration Options
+
+Configurable via the HA options flow after setup:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `scan_interval_presence` | int | 5 | Presence polling interval (minutes) |
+| `scan_interval_calendar` | int | 30 | Calendar polling interval (minutes) |
+| `scan_interval_messages` | int | 15 | Messages polling interval (minutes) |
+| `calendar_days_ahead` | int | 14 | Days ahead to fetch calendar events |
+
+---
+
+## 10. File Structure
 
 ```
 custom_components/aula/
-├── __init__.py              # Entry setup, platforms, shared client
-├── api.py                   # AiohttpAulaClient adapter (HttpClient impl)
-├── auth.py                  # HATokenStorage, auth helpers
-├── config_flow.py           # ConfigFlow with MitID QR step + options flow
-├── const.py                 # DOMAIN, PLATFORMS, defaults, logger
-├── coordinator.py           # DataUpdateCoordinators (presence, calendar, etc.)
-├── data.py                  # AulaData runtime dataclass
-├── entity.py                # AulaEntity base class (device info mixin)
-├── sensor.py                # Presence sensor, unread messages, latest post
-├── binary_sensor.py         # At-school binary sensor
-├── calendar.py              # School calendar entity
-├── todo.py                  # Homework tasks todo list
-├── manifest.json            # Integration manifest
-├── strings.json             # English strings (used for translations)
+├── __init__.py          # async_setup_entry, async_unload_entry
+├── config_flow.py       # ConfigFlow (user + qr_code steps), OptionsFlow
+├── const.py             # DOMAIN, logger, default intervals
+├── coordinator.py       # All DataUpdateCoordinator subclasses
+├── entity.py            # AulaEntity base class (device info)
+├── sensor.py            # PresenceSensor, MessagesSensor, LatestPostSensor
+├── binary_sensor.py     # AtSchoolBinarySensor
+├── calendar.py          # SchoolCalendar
+├── todo.py              # HomeworkTodoList
+├── manifest.json
+├── strings.json
 └── translations/
-    ├── en.json              # English
-    └── da.json              # Danish
+    ├── en.json
+    └── da.json
 ```
 
 ### manifest.json
@@ -334,7 +338,6 @@ custom_components/aula/
   "name": "Aula",
   "codeowners": ["@nickknissen"],
   "config_flow": true,
-  "dependencies": [],
   "documentation": "https://github.com/nickknissen/hass-aula",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nickknissen/hass-aula/issues",
@@ -345,78 +348,115 @@ custom_components/aula/
 
 ---
 
-## Scope & Phasing
+## 11. Phasing
 
 ### Phase 1 — MVP
 
-- Config flow with MitID authentication (username + QR code step)
-- Token persistence and silent refresh
-- Per-child presence sensor + binary sensor
-- Per-child school calendar
-- Unread messages sensor
-- Danish + English translations
+- Config flow: MitID username → QR code display → token persistence
+- Reauth flow when tokens expire
+- Presence sensor + at-school binary sensor (per child)
+- School calendar entity (per child)
+- Messages sensor (per account)
+- Danish and English translations
 
 ### Phase 2
 
-- Homework tasks as todo entities (`get_mu_tasks()`)
-- Latest post sensor
+- Homework todo list (per child, Min Uddannelse)
+- Latest post sensor (per account)
 - Options flow for polling intervals
-- Meebook/EasyIQ weekly plan support
+- Diagnostics support (`async_get_config_entry_diagnostics`)
 
 ### Phase 3 — Future
 
-- Library loans sensor (books due)
-- Gallery image download as HA media source
-- Message notification events (HA event entity)
-- Weekly letter sensors
-- aiohttp adapter (replace httpx with HA's shared session)
+- Library loans sensor (books due, from Cicero)
+- EasyIQ / Meebook weekly plan entities
+- MoMo course tracking
+- Event entity for message/post notifications
+- Gallery as HA media source
 
 ---
 
-## Dependencies
+## 12. Key Technical Considerations
 
-| Package | Version | Purpose                          |
-|---------|---------|----------------------------------|
-| `aula`  | >=0.1.1 | Core Aula API client             |
+### httpx in Home Assistant
 
-The `aula` package transitively depends on: `httpx`, `beautifulsoup4`,
-`html2text`, `pycryptodome`, `qrcode`.
+The `aula` library uses `httpx` internally (via `HttpxHttpClient`). HA
+convention is `aiohttp`. Two options:
+
+1. **Use httpx directly** (recommended for MVP): The library bundles it. Works
+   fine — httpx is async and well-maintained. List it as a requirement.
+2. **Write an aiohttp adapter**: The library's `HttpClient` is a protocol, so
+   we could implement it with `aiohttp.ClientSession`. However, the auth flow
+   (`MitIDAuthClient`) uses `httpx` internally and does not go through the
+   `HttpClient` protocol — so we can't fully eliminate the httpx dependency.
+
+**Decision**: Use httpx for MVP. Revisit if HA core raises concerns.
+
+### ID semantics
+
+The `aula` library has overlapping ID concepts:
+
+| Field | What it is | Where it's used |
+|-------|-----------|-----------------|
+| `child.id` | Child's institution profile ID | `get_daily_overview(child_id=...)` |
+| `child.profile_id` | Child's user profile ID | Device identifier |
+| `profile.institution_profile_ids` | All institution profile IDs (parent + children) | `get_calendar_events(...)`, `get_posts(...)` |
+
+The coordinator must use the right ID for each API call.
+
+### Widget API calls
+
+Some endpoints (Min Uddannelse tasks, library, Meebook, EasyIQ) are third-party
+widget integrations that require:
+
+1. A `session_uuid` from `get_profile_context()["data"]["userId"]`
+2. A per-widget bearer token fetched internally by `_get_bearer_token(widget_id)`
+3. Child/institution filters as string lists (not ints)
+
+The tasks coordinator must fetch the profile context to obtain the session UUID,
+then pass the correct widget ID, child filters, and institution filters. The
+bearer token is handled internally by the `AulaApiClient`.
+
+### Rate limiting
+
+Aula's API rate limits are undocumented. The default polling intervals (5–60
+minutes) are conservative. If users report being rate-limited, the options flow
+allows increasing intervals.
+
+### Multi-account support
+
+Multiple config entries (multiple MitID users) are supported. Each entry gets
+its own `AulaApiClient`, token storage, and set of coordinators. No shared
+global state.
 
 ---
 
-## Testing Strategy
+## 13. Testing Strategy
 
-- **Unit tests:** Mock `AulaApiClient` methods, verify entity states and
-  attributes from known API response fixtures.
-- **Config flow tests:** Mock `authenticate_and_create_client()`, test
-  happy-path setup, auth failure, and reauth flow.
-- **Coordinator tests:** Mock API calls, verify `UpdateFailed` and
-  `ConfigEntryAuthFailed` are raised correctly.
-- **Integration tests:** Use HA's `pytest-homeassistant-custom-component`
-  framework.
+| Layer | Approach |
+|-------|----------|
+| **Config flow** | Mock `authenticate_and_create_client()`. Test: successful setup, auth timeout, reauth trigger. |
+| **Coordinators** | Mock `AulaApiClient` methods with fixture data. Test: successful update, `UpdateFailed` on network error, `ConfigEntryAuthFailed` on 401. |
+| **Entities** | Feed coordinators with known data. Verify: entity states, attributes, unique IDs, device info. |
+| **Integration** | Use `pytest-homeassistant-custom-component`. Test: full setup/unload cycle, platform forwarding. |
+
+Test fixtures will use the `_raw` dicts preserved on all `aula` data models to
+create realistic mock data.
 
 ---
 
-## Open Questions
+## 14. Open Questions
 
-1. **QR code display in config flow:** HA config flows support showing images
-   via `description_placeholders` or markdown, but rendering a live-updating QR
-   code is non-trivial. Options:
-   - Render QR as a base64 data URI in markdown description
-   - Use a separate companion page / persistent notification
-   - Display the OTP code as text fallback
+1. **QR code UX in config flow**: HA config flows can show images via markdown
+   in `description_placeholders`, but the experience of scanning two QR codes
+   during setup is unusual. Should we also show the MitID OTP code as a text
+   fallback for users who prefer that?
 
-2. **httpx vs aiohttp:** The `aula` library uses httpx internally (via
-   `HttpxHttpClient`). HA convention is aiohttp. For MVP, using httpx directly
-   is acceptable since the library's `HttpClient` protocol allows swapping
-   later. Consider whether to add `httpx` as an explicit requirement or rely on
-   the transitive dependency from `aula`.
+2. **Token expiry horizon**: How long do Aula refresh tokens remain valid? If
+   they expire after hours (not days), the reauth prompt may fire frequently for
+   users who restart HA. Needs real-world testing.
 
-3. **Multi-account support:** The integration should support multiple config
-   entries (multiple Aula accounts / MitID users). Each entry gets its own
-   `AulaApiClient` and set of coordinators. Verify there are no singleton
-   conflicts.
-
-4. **Rate limiting:** Aula's API rate limits are undocumented. Conservative
-   default polling intervals protect against this, but may need adjustment based
-   on user reports.
+3. **Calendar `async_get_events` vs coordinator**: Should the calendar entity
+   serve events purely from the coordinator's cached data, or should it make
+   live API calls in `async_get_events()` for the requested range? Live calls
+   are more accurate but increase API load when the user scrolls the calendar.
