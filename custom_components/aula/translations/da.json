@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Indtast dit MitID brugernavn for at starte godkendelse.",
+        "data": {
+          "mitid_username": "MitID brugernavn"
+        }
+      },
+      "mitid_auth": {
+        "title": "MitID Godkendelse",
+        "description": "Åbn din MitID app og scan QR-koden.\n\n![MitID QR-kode]({qr_url})"
+      },
+      "reauth_confirm": {
+        "title": "Godkend igen med MitID",
+        "description": "Din Aula-session er udløbet. Godkend igen med MitID for bruger {mitid_username}."
+      },
+      "reconfigure": {
+        "description": "Opdater dit MitID brugernavn og godkend igen.",
+        "data": {
+          "mitid_username": "MitID brugernavn"
+        }
+      }
+    },
+    "progress": {
+      "authenticating": "Venter på MitID-godkendelse..."
+    },
+    "error": {
+      "auth_failed": "MitID-godkendelse mislykkedes. Prøv venligst igen.",
+      "connection": "Kan ikke oprette forbindelse til Aula. Kontroller venligst dit netværk.",
+      "unknown": "Der opstod en ukendt fejl."
+    },
+    "abort": {
+      "already_configured": "Denne MitID-konto er allerede konfigureret.",
+      "auth_failed": "MitID-godkendelse mislykkedes.",
+      "reauth_successful": "Godkendelse gennemført."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "presence_status": {
+        "name": "Tilstedeværelsesstatus",
+        "state": {
+          "not_present": "Ikke kommet",
+          "sick": "Syg",
+          "reported_absent": "Ferie/fri",
+          "present": "Til stede",
+          "fieldtrip": "På tur",
+          "sleeping": "Sover",
+          "spare_time_activity": "Til aktivitet",
+          "physical_placement": "Fysisk placering",
+          "checked_out": "Gået"
+        }
+      },
+      "check_in_time": {
+        "name": "Indtjekningstid"
+      },
+      "check_out_time": {
+        "name": "Udtjekningstid"
+      },
+      "entry_time": {
+        "name": "Ankomsttid"
+      },
+      "exit_time": {
+        "name": "Afgangstid"
+      },
+      "location": {
+        "name": "Placering"
+      }
+    },
+    "binary_sensor": {
+      "is_present": {
+        "name": "Til stede"
+      }
+    },
+    "calendar": {
+      "school_calendar": {
+        "name": "Skolekalender"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Godkendelse med Aula mislykkedes. Godkend venligst igen."
+    },
+    "connection_failed": {
+      "message": "Kan ikke oprette forbindelse til Aula. Prøv venligst igen senere."
+    }
+  }
+}
