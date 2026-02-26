@@ -15,6 +15,22 @@ ignore = [
     "ISC001", # incompatible with formatter
 ]
 
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # Use of assert detected (expected in tests)
+    "ARG001",  # Unused function argument (fixtures)
+    "ANN201",  # Missing return type annotation for public function
+    "ANN202",  # Missing return type annotation for private function
+    "TC002",   # Move third-party import into type-checking block
+    "TC003",   # Move stdlib import into type-checking block
+    "PLC0415", # Import should be at top-level of file
+    "D103",    # Missing docstring in public function
+    "SLF001",  # Private member accessed (testing internals)
+    "PLR0913", # Too many arguments in function definition
+    "FBT001",  # Boolean-typed positional argument
+    "FBT002",  # Boolean default positional argument
+]
+
 [lint.flake8-pytest-style]
 fixture-parentheses = false
 

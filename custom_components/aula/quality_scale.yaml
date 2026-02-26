@@ -1,0 +1,152 @@
+# Quality Scale for the Aula integration
+# https://developers.home-assistant.io/docs/integration_quality_scale_index
+
+# Bronze tier
+rules:
+  action-setup:
+    status: exempt
+    comment: No custom actions/services are registered.
+  appropriate-polling:
+    status: done
+    comment: Presence polls every 5 min, calendar every 60 min.
+  brands:
+    status: done
+    comment: Logo and icon provided.
+  common-modules:
+    status: done
+    comment: Uses coordinator pattern, base entity, data module.
+  config-flow:
+    status: done
+    comment: Multi-step config flow with MitID authentication.
+  config-flow-test-coverage:
+    status: done
+    comment: All flow paths tested.
+  dependency-transparency:
+    status: done
+    comment: Uses aula==0.2.0 from PyPI.
+  docs-actions:
+    status: exempt
+    comment: No custom actions/services.
+  docs-high-level-description:
+    status: done
+  docs-installation-instructions:
+    status: done
+  docs-removal-instructions:
+    status: done
+  entity-event-setup:
+    status: exempt
+    comment: No event entities.
+  entity-unique-id:
+    status: done
+    comment: "Pattern: {child_id}_{entity_key}"
+  has-entity-name:
+    status: done
+    comment: All entities set _attr_has_entity_name = True.
+  runtime-data:
+    status: done
+    comment: Uses AulaRuntimeData dataclass stored in entry.runtime_data.
+  test-before-configure:
+    status: done
+    comment: Config flow validates MitID credentials before creating entry.
+  test-before-setup:
+    status: done
+    comment: Client creation wrapped in try/except, raises ConfigEntryNotReady or ConfigEntryAuthFailed.
+  unique-config-entry:
+    status: done
+    comment: Unique ID based on slugified MitID username.
+
+  # Silver tier
+  action-exceptions:
+    status: exempt
+    comment: No custom actions.
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry unloads all platforms and closes client.
+  docs-configuration-parameters:
+    status: done
+    comment: MitID username and QR code process documented.
+  docs-installation-parameters:
+    status: done
+  entity-unavailable:
+    status: done
+    comment: CoordinatorEntity handles unavailable state automatically.
+  integration-owner:
+    status: done
+    comment: "@nickknissen is the codeowner."
+  log-when-unavailable:
+    status: done
+    comment: Coordinator logs update failures automatically.
+  parallel-updates:
+    status: done
+    comment: PARALLEL_UPDATES = 1 for all platforms.
+  reauthentication-flow:
+    status: done
+    comment: Reauth flow triggered on ConfigEntryAuthFailed.
+  test-coverage:
+    status: done
+    comment: ">95% test coverage."
+
+  # Gold tier
+  devices:
+    status: done
+    comment: Each child is a device with institution info.
+  diagnostics:
+    status: done
+    comment: PII-redacted diagnostics support.
+  discovery:
+    status: exempt
+    comment: Cloud service, not discoverable on local network.
+  discovery-update-info:
+    status: exempt
+    comment: Cloud service, no network info to update.
+  docs-data-update:
+    status: done
+    comment: Polling intervals documented.
+  docs-examples:
+    status: done
+    comment: Automation examples provided.
+  docs-known-limitations:
+    status: done
+    comment: MitID re-auth, no real-time updates, no message sending.
+  docs-supported-devices:
+    status: done
+    comment: Aula platform (Danish schools using aula.dk).
+  docs-supported-functions:
+    status: done
+    comment: Entity list with descriptions per platform.
+  docs-troubleshooting:
+    status: done
+    comment: Common MitID auth issues, token expiry, connection problems.
+  docs-use-cases:
+    status: done
+    comment: Presence notifications, school calendar sync, morning routine automation.
+  dynamic-devices:
+    status: done
+    comment: Stale device removal on setup, new children detected on coordinator refresh.
+  entity-category:
+    status: done
+    comment: Diagnostic sensors properly categorized.
+  entity-device-class:
+    status: done
+    comment: All entities have appropriate device classes.
+  entity-disabled-by-default:
+    status: done
+    comment: Entry/exit time and location sensors disabled by default.
+  entity-translations:
+    status: done
+    comment: All entities have translation keys in strings.json.
+  exception-translations:
+    status: done
+    comment: Auth and connection errors have translatable messages.
+  icon-translations:
+    status: done
+    comment: icons.json provides per-entity icon mappings.
+  reconfiguration-flow:
+    status: done
+    comment: Reconfigure step allows changing MitID username.
+  repair-issues:
+    status: done
+    comment: Repair issues for reauth and child removal.
+  stale-devices:
+    status: done
+    comment: Devices for removed children are cleaned up on setup.

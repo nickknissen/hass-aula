@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Enter your MitID username to begin authentication.",
+        "data": {
+          "mitid_username": "MitID username"
+        }
+      },
+      "mitid_auth": {
+        "title": "MitID Authentication",
+        "description": "Open your MitID app and scan the QR code.\n\n![MitID QR Code]({qr_url})"
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate with MitID",
+        "description": "Your Aula session has expired. Re-authenticate with MitID for user {mitid_username}."
+      },
+      "reconfigure": {
+        "description": "Update your MitID username and re-authenticate.",
+        "data": {
+          "mitid_username": "MitID username"
+        }
+      }
+    },
+    "progress": {
+      "authenticating": "Waiting for MitID authentication..."
+    },
+    "error": {
+      "auth_failed": "MitID authentication failed. Please try again.",
+      "connection": "Unable to connect to Aula. Please check your network.",
+      "unknown": "An unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This MitID account is already configured.",
+      "auth_failed": "MitID authentication failed.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "presence_status": {
+        "name": "Presence status",
+        "state": {
+          "not_present": "Not present",
+          "sick": "Sick",
+          "reported_absent": "Reported absent",
+          "present": "Present",
+          "fieldtrip": "Field trip",
+          "sleeping": "Sleeping",
+          "spare_time_activity": "Spare time activity",
+          "physical_placement": "Physical placement",
+          "checked_out": "Checked out"
+        }
+      },
+      "check_in_time": {
+        "name": "Check-in time"
+      },
+      "check_out_time": {
+        "name": "Check-out time"
+      },
+      "entry_time": {
+        "name": "Entry time"
+      },
+      "exit_time": {
+        "name": "Exit time"
+      },
+      "location": {
+        "name": "Location"
+      }
+    },
+    "binary_sensor": {
+      "is_present": {
+        "name": "Present"
+      }
+    },
+    "calendar": {
+      "school_calendar": {
+        "name": "School calendar"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Authentication with Aula failed. Please re-authenticate."
+    },
+    "connection_failed": {
+      "message": "Unable to connect to Aula. Please try again later."
+    }
+  }
+}
