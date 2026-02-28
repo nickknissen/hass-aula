@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from aula.models.presence import PresenceState
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-
-from aula.models.presence import PresenceState
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity

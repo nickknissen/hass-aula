@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003
+import asyncio
 from typing import Any
 
 import voluptuous as vol
+from aula import authenticate
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -13,8 +14,6 @@ from homeassistant.config_entries import (
 )
 from homeassistant.helpers import selector
 from slugify import slugify
-
-from aula import authenticate
 
 from .const import CONF_MITID_USERNAME, CONF_TOKEN_DATA, DOMAIN, LOGGER
 from .qr_view import AulaQRView, generate_animated_qr_svg
@@ -85,7 +84,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 "hass_aula_mitid_auth",
             )
             LOGGER.debug(
-                "Auth task created. qr_svg set=%s, qr_view has svg=%s, qr_ready_event set=%s",
+                "Auth task created. qr_svg set=%s, qr_view has svg=%s,"
+                " qr_ready_event set=%s",
                 self._qr_svg is not None,
                 self._qr_view is not None and self._qr_view._svg is not None,  # noqa: SLF001
                 self._qr_ready_event.is_set(),
@@ -120,8 +120,10 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             if self._qr_ready_task and not self._qr_ready_task.done()
             else self._auth_task
         )
-        LOGGER.debug("Showing progress spinner, progress_task=%s",
-                     "qr_ready" if progress_task is self._qr_ready_task else "auth")
+        LOGGER.debug(
+            "Showing progress spinner, progress_task=%s",
+            "qr_ready" if progress_task is self._qr_ready_task else "auth",
+        )
         return self.async_show_progress(
             step_id="mitid_auth",
             progress_action="authenticating",
@@ -174,7 +176,11 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Show the QR code as a form step (FORM renders markdown images; PROGRESS does not)."""
+        """
+        Show the QR code as a form step.
+
+        FORM renders markdown images; PROGRESS does not.
+        """
         if user_input is not None:
             # User clicked Submit after approving on their phone.
             if self._auth_task and self._auth_task.done():
@@ -297,7 +303,9 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 self._qr_view.update_svg(self._qr_svg)
                 LOGGER.debug("QR SVG written to view")
             else:
-                LOGGER.warning("on_qr_codes fired but _qr_view is None — SVG not served")
+                LOGGER.warning(
+                    "on_qr_codes fired but _qr_view is None — SVG not served"
+                )
             if self._qr_ready_event:
                 self._qr_ready_event.set()
                 LOGGER.debug("QR ready event set")
