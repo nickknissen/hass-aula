@@ -5,10 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import dt as dt_util
-
 from aula import (
     AulaAuthenticationError,
     AulaConnectionError,
@@ -17,13 +13,15 @@ from aula import (
     CalendarEvent,
     DailyOverview,
 )
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import CALENDAR_POLL_INTERVAL, LOGGER, PRESENCE_POLL_INTERVAL
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
     from aula import AulaApiClient, Profile
+    from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
 

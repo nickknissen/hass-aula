@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-
 from aula import (
     AulaAuthenticationError,
     AulaConnectionError,
@@ -14,6 +12,7 @@ from aula import (
     AulaServerError,
 )
 from aula import CalendarEvent as AulaCalendarEvent
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
