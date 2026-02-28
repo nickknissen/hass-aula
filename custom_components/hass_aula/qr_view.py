@@ -91,7 +91,9 @@ class AulaQRView(HomeAssistantView):
             LOGGER.warning("QR view GET %s — no SVG yet (returning 404)", self.url)
             return web.Response(status=404, text="QR code not yet available")
 
-        LOGGER.debug("QR view GET %s — serving SVG (%d bytes)", self.url, len(self._svg))
+        LOGGER.debug(
+            "QR view GET %s — serving SVG (%d bytes)", self.url, len(self._svg)
+        )
         return web.Response(
             body=self._svg,
             content_type="image/svg+xml",

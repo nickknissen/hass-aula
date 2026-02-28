@@ -19,10 +19,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
+    from aula import DailyOverview
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-    from aula import DailyOverview
 
     from .coordinator import AulaPresenceCoordinator
     from .data import AulaConfigEntry
