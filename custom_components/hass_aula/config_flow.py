@@ -307,8 +307,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         )
         try:
             client = await create_client(self._token_data, http_client=http_client)
-            widgets = await client.get_widgets()
-            LOGGER.debug("Fetched %d widgets", len(widgets))
+            widgets = [w for w in await client.get_widgets() if w.widget_type == "secure"]
+            LOGGER.debug("Fetched %d secure widgets", len(widgets))
             return widgets
         except Exception:
             LOGGER.exception("Failed to fetch widgets")
