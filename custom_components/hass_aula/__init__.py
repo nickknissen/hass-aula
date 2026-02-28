@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from aula import (
@@ -42,15 +43,17 @@ async def async_setup_entry(
     token_data = entry.data[CONF_TOKEN_DATA]
     cookies = token_data.get("cookies", {})
 
+    http_client = await hass.async_add_executor_job(_create_http_client, cookies)
     try:
-        http_client = await hass.async_add_executor_job(_create_http_client, cookies)
         client = await create_client(token_data, http_client=http_client)
     except AulaAuthenticationError as err:
+        await http_client.close()
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="auth_failed",
         ) from err
     except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+        await http_client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key="connection_failed",
@@ -74,8 +77,10 @@ async def async_setup_entry(
     presence_coordinator = AulaPresenceCoordinator(hass, client, profile)
     calendar_coordinator = AulaCalendarCoordinator(hass, client, profile)
 
-    await presence_coordinator.async_config_entry_first_refresh()
-    await calendar_coordinator.async_config_entry_first_refresh()
+    await asyncio.gather(
+        presence_coordinator.async_config_entry_first_refresh(),
+        calendar_coordinator.async_config_entry_first_refresh(),
+    )
 
     entry.runtime_data = AulaRuntimeData(
         client=client,
