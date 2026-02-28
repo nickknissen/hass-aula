@@ -7,6 +7,8 @@ from typing import Any
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 
+from .const import LOGGER
+
 
 def generate_animated_qr_svg(qr1: Any, qr2: Any) -> str:
     """
@@ -76,8 +78,8 @@ class AulaQRView(HomeAssistantView):
         """Initialize the QR view."""
         self._flow_id = flow_id
         self._svg: str | None = None
-        self.url = f"/api/aula/qr/{flow_id}"
-        self.name = f"api:aula:qr:{flow_id}"
+        self.url = f"/api/hass_aula/qr/{flow_id}"
+        self.name = f"api:hass_aula:qr:{flow_id}"
 
     def update_svg(self, svg: str) -> None:
         """Update the SVG content."""
@@ -86,8 +88,10 @@ class AulaQRView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:  # noqa: ARG002
         """Handle GET request for the QR code SVG."""
         if self._svg is None:
+            LOGGER.warning("QR view GET %s — no SVG yet (returning 404)", self.url)
             return web.Response(status=404, text="QR code not yet available")
 
+        LOGGER.debug("QR view GET %s — serving SVG (%d bytes)", self.url, len(self._svg))
         return web.Response(
             body=self._svg,
             content_type="image/svg+xml",

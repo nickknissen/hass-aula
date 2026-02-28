@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,
 )
-from custom_components.aula.diagnostics import async_get_config_entry_diagnostics
+from custom_components.hass_aula.diagnostics import async_get_config_entry_diagnostics
 
 from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME
 

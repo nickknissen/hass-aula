@@ -9,7 +9,11 @@
       },
       "mitid_auth": {
         "title": "MitID Authentication",
-        "description": "Open your MitID app and scan the QR code.\n\n![MitID QR Code]({qr_url})"
+        "description": "Connecting to MitID, please wait..."
+      },
+      "mitid_qr": {
+        "title": "Scan QR Code",
+        "description": "Open your MitID app and scan the QR code below. Once you have approved the login on your phone, click **Submit**.\n\n![MitID QR Code]({qr_url})"
       },
       "reauth_confirm": {
         "title": "Re-authenticate with MitID",

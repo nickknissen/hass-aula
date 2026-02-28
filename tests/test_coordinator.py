@@ -15,12 +15,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,
 )
-from custom_components.aula.coordinator import (
+from custom_components.hass_aula.coordinator import (
     AulaCalendarCoordinator,
     AulaPresenceCoordinator,
 )

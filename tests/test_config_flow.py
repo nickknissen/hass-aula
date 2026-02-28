@@ -8,7 +8,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,
@@ -30,7 +30,7 @@ async def test_user_flow_success(
     assert result["step_id"] == "user"
 
     with patch(
-        "custom_components.aula.config_flow.authenticate",
+        "custom_components.hass_aula.config_flow.authenticate",
         return_value=MOCK_TOKEN_DATA,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -64,7 +64,7 @@ async def test_user_flow_duplicate(
     """Test user flow aborts for duplicate entry."""
     # First, set up an existing entry
     with patch(
-        "custom_components.aula.config_flow.authenticate",
+        "custom_components.hass_aula.config_flow.authenticate",
         return_value=MOCK_TOKEN_DATA,
     ):
         result = await hass.config_entries.flow.async_init(
@@ -109,7 +109,7 @@ async def test_user_flow_auth_failure(
     )
 
     with patch(
-        "custom_components.aula.config_flow.authenticate",
+        "custom_components.hass_aula.config_flow.authenticate",
         side_effect=RuntimeError("MitID authentication failed"),
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -154,7 +154,7 @@ async def test_reauth_flow(
     assert result["step_id"] == "reauth_confirm"
 
     with patch(
-        "custom_components.aula.config_flow.authenticate",
+        "custom_components.hass_aula.config_flow.authenticate",
         return_value=MOCK_TOKEN_DATA,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -202,7 +202,7 @@ async def test_reconfigure_flow(
 
     new_username = "new_user"
     with patch(
-        "custom_components.aula.config_flow.authenticate",
+        "custom_components.hass_aula.config_flow.authenticate",
         return_value=MOCK_TOKEN_DATA,
     ):
         result = await hass.config_entries.flow.async_configure(

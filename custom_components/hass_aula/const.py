@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 LOGGER: Logger = getLogger(__package__)
 
-DOMAIN = "aula"
+DOMAIN = "hass_aula"
 
 CONF_MITID_USERNAME = "mitid_username"
 CONF_TOKEN_DATA = "token_data"  # noqa: S105

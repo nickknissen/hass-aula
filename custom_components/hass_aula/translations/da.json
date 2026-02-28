@@ -9,7 +9,11 @@
       },
       "mitid_auth": {
         "title": "MitID Godkendelse",
-        "description": "Åbn din MitID app og scan QR-koden.\n\n![MitID QR-kode]({qr_url})"
+        "description": "Opretter forbindelse til MitID, vent venligst..."
+      },
+      "mitid_qr": {
+        "title": "Scan QR-kode",
+        "description": "Åbn din MitID app og scan QR-koden nedenfor. Når du har godkendt på din telefon, klik **Send**.\n\n![MitID QR-kode]({qr_url})"
       },
       "reauth_confirm": {
         "title": "Godkend igen med MitID",
@@ -23,7 +27,7 @@
       }
     },
     "progress": {
-      "authenticating": "Venter på MitID-godkendelse..."
+      "authenticating": "Venter på MitID-godkendelse, åben din app"
     },
     "error": {
       "auth_failed": "MitID-godkendelse mislykkedes. Prøv venligst igen.",

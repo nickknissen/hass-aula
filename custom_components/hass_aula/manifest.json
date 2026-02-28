@@ -1,5 +1,5 @@
 {
-  "domain": "aula",
+  "domain": "hass_aula",
   "name": "Aula",
   "codeowners": ["@nickknissen"],
   "config_flow": true,
