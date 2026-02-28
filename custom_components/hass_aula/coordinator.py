@@ -54,11 +54,14 @@ class AulaPresenceCoordinator(
         """Fetch presence data for all children."""
         try:
             results = await asyncio.gather(
-                *(self.client.get_daily_overview(child.id) for child in self.profile.children)
+                *(
+                    self.client.get_daily_overview(child.id)
+                    for child in self.profile.children
+                )
             )
             data: dict[int, DailyOverview | None] = {
                 child.id: result
-                for child, result in zip(self.profile.children, results)
+                for child, result in zip(self.profile.children, results, strict=False)
             }
         except AulaAuthenticationError as err:
             raise ConfigEntryAuthFailed(

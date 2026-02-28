@@ -84,8 +84,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 "hass_aula_mitid_auth",
             )
             LOGGER.debug(
-                "Auth task created. qr_svg set=%s, qr_view has svg=%s,"
-                " qr_ready_event set=%s",
+                "Auth task created. qr_svg set=%s, "
+                "qr_view has svg=%s, qr_ready_event set=%s",
                 self._qr_svg is not None,
                 self._qr_view is not None and self._qr_view._svg is not None,  # noqa: SLF001
                 self._qr_ready_event.is_set(),
@@ -176,11 +176,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """
-        Show the QR code as a form step.
-
-        FORM renders markdown images; PROGRESS does not.
-        """
+        """Show QR code step; FORM renders markdown images, PROGRESS does not."""
         if user_input is not None:
             # User clicked Submit after approving on their phone.
             if self._auth_task and self._auth_task.done():
