@@ -92,40 +92,35 @@ async def test_presence_status_not_present(
     assert state.state == "not_present"
 
 
-async def test_check_in_time_sensor(
+async def test_presence_sensor_attributes(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
 ) -> None:
-    """Test check-in time sensor."""
+    """Test that check-in/out times and location are exposed as attributes."""
     check_in = datetime(2024, 1, 15, 8, 30, tzinfo=UTC)
-    overview = mock_daily_overview(check_in_time=check_in)
-    mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
-
-    entry = _create_config_entry(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.test_child_check_in_time")
-    assert state is not None
-    assert state.state == check_in.isoformat()
-
-
-async def test_check_out_time_sensor(
-    hass: HomeAssistant,
-    mock_aula_client: AsyncMock,
-) -> None:
-    """Test check-out time sensor."""
     check_out = datetime(2024, 1, 15, 15, 0, tzinfo=UTC)
-    overview = mock_daily_overview(check_out_time=check_out)
+    entry_time = datetime(2024, 1, 15, 8, 25, tzinfo=UTC)
+    exit_time = datetime(2024, 1, 15, 15, 5, tzinfo=UTC)
+    overview = mock_daily_overview(
+        check_in_time=check_in,
+        check_out_time=check_out,
+        entry_time=entry_time,
+        exit_time=exit_time,
+        location="Room 1",
+    )
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
     entry = _create_config_entry(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_child_check_out_time")
+    state = hass.states.get("sensor.test_child_presence_status")
     assert state is not None
-    assert state.state == check_out.isoformat()
+    assert state.attributes["check_in_time"] == check_in
+    assert state.attributes["check_out_time"] == check_out
+    assert state.attributes["entry_time"] == entry_time
+    assert state.attributes["exit_time"] == exit_time
+    assert state.attributes["location"] == "Room 1"
 
 
 async def test_sensor_unavailable_when_no_overview(

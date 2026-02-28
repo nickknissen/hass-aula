@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -10,16 +9,13 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.const import EntityCategory
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from datetime import datetime
-
     from aula import DailyOverview
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -27,62 +23,20 @@ if TYPE_CHECKING:
     from .data import AulaConfigEntry
 
 
-@dataclass(frozen=True, kw_only=True)
-class AulaPresenceSensorDescription(SensorEntityDescription):
-    """Describe an Aula presence sensor."""
-
-    value_fn: Callable[[DailyOverview | None], Any]
-
-
-PRESENCE_SENSOR_DESCRIPTIONS: tuple[AulaPresenceSensorDescription, ...] = (
-    AulaPresenceSensorDescription(
-        key="presence_status",
-        device_class=SensorDeviceClass.ENUM,
-        options=[
-            "not_present",
-            "sick",
-            "reported_absent",
-            "present",
-            "fieldtrip",
-            "sleeping",
-            "spare_time_activity",
-            "physical_placement",
-            "checked_out",
-        ],
-        value_fn=lambda overview: overview.status.name.lower() if overview else None,
-    ),
-    AulaPresenceSensorDescription(
-        key="check_in_time",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda overview: overview.check_in_time if overview else None,
-    ),
-    AulaPresenceSensorDescription(
-        key="check_out_time",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda overview: overview.check_out_time if overview else None,
-    ),
-    AulaPresenceSensorDescription(
-        key="entry_time",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda overview: overview.entry_time if overview else None,
-    ),
-    AulaPresenceSensorDescription(
-        key="exit_time",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda overview: overview.exit_time if overview else None,
-    ),
-    AulaPresenceSensorDescription(
-        key="location",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda overview: overview.location if overview else None,
-    ),
+PRESENCE_SENSOR_DESCRIPTION = SensorEntityDescription(
+    key="presence_status",
+    device_class=SensorDeviceClass.ENUM,
+    options=[
+        "not_present",
+        "sick",
+        "reported_absent",
+        "present",
+        "fieldtrip",
+        "sleeping",
+        "spare_time_activity",
+        "physical_placement",
+        "checked_out",
+    ],
 )
 
 
@@ -95,38 +49,46 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.presence_coordinator
     profile = entry.runtime_data.profile
 
-    entities: list[AulaPresenceSensor] = []
-    for child in profile.children:
-        entities.extend(
-            AulaPresenceSensor(
-                coordinator=coordinator,
-                child=child,
-                description=description,
-            )
-            for description in PRESENCE_SENSOR_DESCRIPTIONS
-        )
-
-    async_add_entities(entities)
+    async_add_entities(
+        AulaPresenceSensor(coordinator=coordinator, child=child)
+        for child in profile.children
+    )
 
 
 class AulaPresenceSensor(AulaEntity, SensorEntity):
     """Representation of an Aula presence sensor."""
 
-    entity_description: AulaPresenceSensorDescription
+    entity_description = PRESENCE_SENSOR_DESCRIPTION
 
     def __init__(
         self,
         coordinator: AulaPresenceCoordinator,
         child: Any,
-        description: AulaPresenceSensorDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, child)
-        self.entity_description = description
-        self._attr_unique_id = f"{child.id}_{description.key}"
+        self._attr_unique_id = f"{child.id}_presence_status"
 
     @property
-    def native_value(self) -> str | datetime | None:
-        """Return the state of the sensor."""
-        overview = self.coordinator.data.get(self._child.id)
-        return self.entity_description.value_fn(overview)
+    def _overview(self) -> DailyOverview | None:
+        return self.coordinator.data.get(self._child.id)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the presence status."""
+        overview = self._overview
+        return overview.status.name.lower() if overview else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return time and location details as attributes."""
+        overview = self._overview
+        if not overview:
+            return {}
+        return {
+            "check_in_time": overview.check_in_time,
+            "check_out_time": overview.check_out_time,
+            "entry_time": overview.entry_time,
+            "exit_time": overview.exit_time,
+            "location": overview.location,
+        }
