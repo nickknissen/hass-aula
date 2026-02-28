@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -52,9 +53,13 @@ class AulaPresenceCoordinator(
     async def _async_update_data(self) -> dict[int, DailyOverview | None]:
         """Fetch presence data for all children."""
         try:
-            data: dict[int, DailyOverview | None] = {}
-            for child in self.profile.children:
-                data[child.id] = await self.client.get_daily_overview(child.id)
+            results = await asyncio.gather(
+                *(self.client.get_daily_overview(child.id) for child in self.profile.children)
+            )
+            data: dict[int, DailyOverview | None] = {
+                child.id: result
+                for child, result in zip(self.profile.children, results)
+            }
         except AulaAuthenticationError as err:
             raise ConfigEntryAuthFailed(
                 translation_domain="hass_aula",
