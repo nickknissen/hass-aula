@@ -15,7 +15,6 @@ from .entity import AulaEntity
 
 if TYPE_CHECKING:
     from aula import DailyOverview
-
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
