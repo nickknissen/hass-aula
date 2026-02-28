@@ -55,21 +55,6 @@
           "physical_placement": "Physical placement",
           "checked_out": "Checked out"
         }
-      },
-      "check_in_time": {
-        "name": "Check-in time"
-      },
-      "check_out_time": {
-        "name": "Check-out time"
-      },
-      "entry_time": {
-        "name": "Entry time"
-      },
-      "exit_time": {
-        "name": "Exit time"
-      },
-      "location": {
-        "name": "Location"
       }
     },
     "binary_sensor": {

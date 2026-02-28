@@ -55,21 +55,6 @@
           "physical_placement": "Fysisk placering",
           "checked_out": "Gået"
         }
-      },
-      "check_in_time": {
-        "name": "Indtjekningstid"
-      },
-      "check_out_time": {
-        "name": "Udtjekningstid"
-      },
-      "entry_time": {
-        "name": "Ankomsttid"
-      },
-      "exit_time": {
-        "name": "Afgangstid"
-      },
-      "location": {
-        "name": "Placering"
       }
     },
     "binary_sensor": {
