@@ -9,15 +9,15 @@
       },
       "mitid_auth": {
         "title": "MitID Authentication",
-        "description": "Connecting to MitID, please wait..."
+        "description": "Generating QR code, please wait..."
       },
       "mitid_qr": {
         "title": "Scan QR Code",
-        "description": "Open your MitID app and scan the QR code below. Once you have approved the login on your phone, click **Submit**.\n\n![MitID QR Code]({qr_url})"
+        "description": "Open your MitID app and scan the animated QR code below. Approve the login on your phone, then click **Submit**.\n\n![MitID QR Code]({qr_url})"
       },
       "reauth_confirm": {
         "title": "Re-authenticate with MitID",
-        "description": "Your Aula session has expired. Re-authenticate with MitID for user {mitid_username}."
+        "description": "Your Aula session has expired. Click **Submit** to start re-authentication with MitID for **{mitid_username}**."
       },
       "reconfigure": {
         "description": "Update your MitID username and re-authenticate.",
@@ -27,7 +27,7 @@
       }
     },
     "progress": {
-      "authenticating": "Waiting for MitID authentication..."
+      "authenticating": "Generating QR code, please wait..."
     },
     "error": {
       "auth_failed": "MitID authentication failed. Please try again.",
