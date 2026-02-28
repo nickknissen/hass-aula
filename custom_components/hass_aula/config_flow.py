@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import voluptuous as vol
 from aula import WidgetConfiguration, authenticate, create_client
@@ -287,7 +287,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_auth_complete(self) -> ConfigFlowResult:
-        """After successful auth: go to widget selection for new installs, skip for reauth."""
+        """Route to widget selection for new installs, or skip for reauth."""
         if self._reauth_entry:
             return self.async_update_reload_and_abort(
                 self._reauth_entry,
@@ -302,17 +302,18 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
     async def _async_fetch_widgets(self) -> list[WidgetConfiguration]:
         """Create a temporary client to fetch available widgets."""
         cookies = self._token_data.get("cookies", {}) if self._token_data else {}
-        http_client = await self.hass.async_add_executor_job(
-            HttpxHttpClient, cookies
-        )
+        http_client = await self.hass.async_add_executor_job(HttpxHttpClient, cookies)
         try:
             client = await create_client(self._token_data, http_client=http_client)
-            widgets = [w for w in await client.get_widgets() if w.widget_type == "secure"]
-            LOGGER.debug("Fetched %d secure widgets", len(widgets))
-            return widgets
-        except Exception:
+            widgets = [
+                w for w in await client.get_widgets() if w.widget_type == "secure"
+            ]
+        except Exception:  # noqa: BLE001
             LOGGER.exception("Failed to fetch widgets")
             return []
+        else:
+            LOGGER.debug("Fetched %d secure widgets", len(widgets))
+            return widgets
         finally:
             await http_client.close()
 
