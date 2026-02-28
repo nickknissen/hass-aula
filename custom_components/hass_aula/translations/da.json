@@ -13,7 +13,7 @@
       },
       "mitid_qr": {
         "title": "Scan QR-kode",
-        "description": "Åbn din MitID app og scan den animerede QR-kode nedenfor. Godkend på din telefon, og klik derefter **Send**.\n\n<p style=\"text-align:center\">![MitID QR-kode]({qr_url})</p>"
+        "description": "Åbn din MitID app og scan den animerede QR-kode nedenfor. Godkend på din telefon, og klik derefter **Send**.\n\n![MitID QR-kode]({qr_url})"
       },
       "reauth_confirm": {
         "title": "Godkend igen med MitID",
