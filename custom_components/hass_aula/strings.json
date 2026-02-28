@@ -15,6 +15,13 @@
         "title": "Scan QR Code",
         "description": "Open your MitID app and scan the animated QR code below. Approve the login on your phone, then click **Submit**.\n\n![MitID QR Code]({qr_url})"
       },
+      "select_widgets": {
+        "title": "Select Widgets",
+        "description": "Choose which Aula widgets to enable for this integration.",
+        "data": {
+          "widgets": "Widgets"
+        }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate with MitID",
         "description": "Your Aula session has expired. Click **Submit** to start re-authentication with MitID for **{mitid_username}**."

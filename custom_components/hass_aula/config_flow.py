@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-from aula import authenticate
+from aula import WidgetConfiguration, authenticate, create_client
+from aula.http_httpx import HttpxHttpClient
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -15,7 +16,7 @@ from homeassistant.config_entries import (
 from homeassistant.helpers import selector
 from slugify import slugify
 
-from .const import CONF_MITID_USERNAME, CONF_TOKEN_DATA, DOMAIN, LOGGER
+from .const import CONF_MITID_USERNAME, CONF_TOKEN_DATA, CONF_WIDGETS, DOMAIN, LOGGER
 from .qr_view import AulaQRView, generate_animated_qr_svg
 
 
@@ -34,6 +35,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._qr_svg: str | None = None
         self._qr_view: AulaQRView | None = None
         self._reauth_entry: ConfigEntry | None = None
+        self._available_widgets: list[WidgetConfiguration] = []
 
     async def async_step_user(
         self,
@@ -99,13 +101,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="auth_failed")
 
             self._token_data = self._auth_task.result()
-            return self.async_create_entry(
-                title=self._mitid_username,
-                data={
-                    CONF_MITID_USERNAME: self._mitid_username,
-                    CONF_TOKEN_DATA: self._token_data,
-                },
-            )
+            return await self._async_auth_complete()
 
         # QR is ready — transition out of progress via progress_done, then show QR form.
         # SHOW_PROGRESS can only transition to SHOW_PROGRESS or SHOW_PROGRESS_DONE;
@@ -155,22 +151,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         if self._auth_task:
             self._token_data = self._auth_task.result()
 
-        if self._reauth_entry:
-            return self.async_update_reload_and_abort(
-                self._reauth_entry,
-                data={
-                    CONF_MITID_USERNAME: self._mitid_username,
-                    CONF_TOKEN_DATA: self._token_data,
-                },
-            )
-
-        return self.async_create_entry(
-            title=self._mitid_username,
-            data={
-                CONF_MITID_USERNAME: self._mitid_username,
-                CONF_TOKEN_DATA: self._token_data,
-            },
-        )
+        return await self._async_auth_complete()
 
     async def async_step_mitid_qr(
         self,
@@ -187,21 +168,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                     )
                     return self.async_abort(reason="auth_failed")
                 self._token_data = self._auth_task.result()
-                if self._reauth_entry:
-                    return self.async_update_reload_and_abort(
-                        self._reauth_entry,
-                        data={
-                            CONF_MITID_USERNAME: self._mitid_username,
-                            CONF_TOKEN_DATA: self._token_data,
-                        },
-                    )
-                return self.async_create_entry(
-                    title=self._mitid_username,
-                    data={
-                        CONF_MITID_USERNAME: self._mitid_username,
-                        CONF_TOKEN_DATA: self._token_data,
-                    },
-                )
+                return await self._async_auth_complete()
             # Auth not finished yet — re-show with the latest QR (on_qr_codes
             # keeps updating the view in the background).
             LOGGER.debug("Submit pressed but auth not done yet, re-showing QR form")
@@ -215,6 +182,42 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="mitid_qr",
             data_schema=vol.Schema({}),
             description_placeholders={"qr_url": f"/api/hass_aula/qr/{self.flow_id}"},
+        )
+
+    async def async_step_select_widgets(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Let the user choose which widgets to enable."""
+        if not self._available_widgets:
+            self._available_widgets = await self._async_fetch_widgets()
+
+        if user_input is not None:
+            return self.async_create_entry(
+                title=self._mitid_username,
+                data={
+                    CONF_MITID_USERNAME: self._mitid_username,
+                    CONF_TOKEN_DATA: self._token_data,
+                    CONF_WIDGETS: user_input.get(CONF_WIDGETS, []),
+                },
+            )
+
+        options = [
+            selector.SelectOptionDict(value=w.widget_id, label=w.name)
+            for w in self._available_widgets
+        ]
+        return self.async_show_form(
+            step_id="select_widgets",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_WIDGETS, default=[]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            multiple=True,
+                        ),
+                    ),
+                },
+            ),
         )
 
     async def async_step_reauth(
@@ -282,6 +285,36 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+    async def _async_auth_complete(self) -> ConfigFlowResult:
+        """After successful auth: go to widget selection for new installs, skip for reauth."""
+        if self._reauth_entry:
+            return self.async_update_reload_and_abort(
+                self._reauth_entry,
+                data={
+                    CONF_MITID_USERNAME: self._mitid_username,
+                    CONF_TOKEN_DATA: self._token_data,
+                    CONF_WIDGETS: self._reauth_entry.data.get(CONF_WIDGETS, []),
+                },
+            )
+        return await self.async_step_select_widgets()
+
+    async def _async_fetch_widgets(self) -> list[WidgetConfiguration]:
+        """Create a temporary client to fetch available widgets."""
+        cookies = self._token_data.get("cookies", {}) if self._token_data else {}
+        http_client = await self.hass.async_add_executor_job(
+            HttpxHttpClient, cookies
+        )
+        try:
+            client = await create_client(self._token_data, http_client=http_client)
+            widgets = await client.get_widgets()
+            LOGGER.debug("Fetched %d widgets", len(widgets))
+            return widgets
+        except Exception:
+            LOGGER.exception("Failed to fetch widgets")
+            return []
+        finally:
+            await http_client.close()
 
     async def _async_authenticate(self) -> dict[str, Any]:
         """Run MitID authentication in background."""
