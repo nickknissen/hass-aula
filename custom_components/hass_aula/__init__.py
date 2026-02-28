@@ -14,6 +14,7 @@ from aula import (
     AulaServerError,
     create_client,
 )
+from aula.http_httpx import HttpxHttpClient
 
 from .const import CONF_TOKEN_DATA, DOMAIN, LOGGER, PLATFORMS
 from .coordinator import AulaCalendarCoordinator, AulaPresenceCoordinator
@@ -25,15 +26,22 @@ if TYPE_CHECKING:
     from .data import AulaConfigEntry
 
 
+def _create_http_client(cookies: dict) -> HttpxHttpClient:
+    """Create HTTP client in a thread to avoid blocking SSL cert loading on the event loop."""
+    return HttpxHttpClient(cookies=cookies)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AulaConfigEntry,
 ) -> bool:
     """Set up Aula from a config entry."""
     token_data = entry.data[CONF_TOKEN_DATA]
+    cookies = token_data.get("cookies", {})
 
     try:
-        client = await create_client(token_data)
+        http_client = await hass.async_add_executor_job(_create_http_client, cookies)
+        client = await create_client(token_data, http_client=http_client)
     except AulaAuthenticationError as err:
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
