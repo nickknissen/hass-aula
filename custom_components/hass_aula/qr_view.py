@@ -16,7 +16,7 @@ def generate_animated_qr_svg(qr1: Any, qr2: Any) -> str:
 
     The MitID app expects two QR codes to be scanned alternately.
     This function creates a single SVG with CSS animation that toggles
-    between the two QR codes every 2 seconds.
+    between the two QR codes every 1 second.
     """
     matrix1 = qr1.get_matrix()
     matrix2 = qr2.get_matrix()
@@ -38,8 +38,8 @@ def generate_animated_qr_svg(qr1: Any, qr2: Any) -> str:
         f'viewBox="0 0 {svg_size} {svg_size}" '
         f'width="{svg_size}" height="{svg_size}">'
         "<style>"
-        ".qr1{animation:swap 4s step-end infinite}"
-        ".qr2{animation:swap 4s step-end infinite;animation-delay:2s;opacity:0}"
+        ".qr1{animation:swap 2s step-end infinite}"
+        ".qr2{animation:swap 2s step-end infinite;animation-delay:1s;opacity:0}"
         "@keyframes swap{0%,49%{opacity:1}50%,100%{opacity:0}}"
         "</style>"
         f'<rect width="{svg_size}" height="{svg_size}" fill="white"/>'
