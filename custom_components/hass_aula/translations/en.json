@@ -13,7 +13,7 @@
       },
       "mitid_qr": {
         "title": "Scan QR Code",
-        "description": "Open your MitID app and scan the animated QR code below. Approve the login on your phone, then click **Submit**.\n\n![MitID QR Code]({qr_url})"
+        "description": "Open your MitID app and scan the animated QR code below. Approve the login on your phone, then click **Submit**.\n\n<p style=\"text-align:center\">![MitID QR Code]({qr_url})</p>"
       },
       "reauth_confirm": {
         "title": "Re-authenticate with MitID",
