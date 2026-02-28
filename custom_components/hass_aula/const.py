@@ -12,6 +12,7 @@ DOMAIN = "hass_aula"
 
 CONF_MITID_USERNAME = "mitid_username"
 CONF_TOKEN_DATA = "token_data"  # noqa: S105
+CONF_WIDGETS = "widgets"
 
 PRESENCE_POLL_INTERVAL = 300  # 5 minutes
 CALENDAR_POLL_INTERVAL = 3600  # 60 minutes
