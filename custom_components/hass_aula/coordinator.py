@@ -59,7 +59,7 @@ class AulaPresenceCoordinator(
                 data[child.id] = await self.client.get_daily_overview(child.id)
         except AulaAuthenticationError as err:
             raise ConfigEntryAuthFailed(
-                translation_domain="aula",
+                translation_domain="hass_aula",
                 translation_key="auth_failed",
             ) from err
         except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
@@ -114,7 +114,7 @@ class AulaCalendarCoordinator(
                     result[event.belongs_to].append(event)
         except AulaAuthenticationError as err:
             raise ConfigEntryAuthFailed(
-                translation_domain="aula",
+                translation_domain="hass_aula",
                 translation_key="auth_failed",
             ) from err
         except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:

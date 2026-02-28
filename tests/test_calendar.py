@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,

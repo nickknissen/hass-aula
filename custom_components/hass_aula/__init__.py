@@ -33,7 +33,7 @@ async def async_setup_entry(
     token_data = entry.data[CONF_TOKEN_DATA]
 
     try:
-        client = await hass.async_add_executor_job(create_client, token_data)
+        client = await create_client(token_data)
     except AulaAuthenticationError as err:
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,

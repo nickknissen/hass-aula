@@ -12,7 +12,7 @@ from aula.models.child import Child
 from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,
@@ -108,7 +108,7 @@ def mock_calendar_event(
 def mock_aula_client() -> Generator[AsyncMock]:
     """Create a mock AulaApiClient."""
     with patch(
-        "custom_components.aula.create_client",
+        "custom_components.hass_aula.create_client",
     ) as mock_create:
         client = AsyncMock()
         client.get_profile = AsyncMock(return_value=mock_profile())
@@ -143,7 +143,7 @@ def mock_config_entry(hass: HomeAssistant) -> MagicMock:
 def mock_setup_entry() -> Generator[AsyncMock]:
     """Override async_setup_entry."""
     with patch(
-        "custom_components.aula.async_setup_entry",
+        "custom_components.hass_aula.async_setup_entry",
         return_value=True,
     ) as mock_setup:
         yield mock_setup

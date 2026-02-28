@@ -9,4 +9,4 @@ homeassistant:
 logger:
   default: info
   logs:
-    custom_components.aula: debug
+    custom_components.hass_aula: debug

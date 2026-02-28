@@ -8,7 +8,7 @@ from aula import AulaAuthenticationError, AulaConnectionError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from custom_components.aula.const import (
+from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
     DOMAIN,
@@ -64,7 +64,7 @@ async def test_setup_entry_auth_error(
 ) -> None:
     """Test setup fails with auth error."""
     with patch(
-        "custom_components.aula.create_client",
+        "custom_components.hass_aula.create_client",
         side_effect=AulaAuthenticationError("Auth failed", 401),
     ):
         entry = _create_config_entry(hass)
@@ -79,7 +79,7 @@ async def test_setup_entry_connection_error(
 ) -> None:
     """Test setup retries with connection error."""
     with patch(
-        "custom_components.aula.create_client",
+        "custom_components.hass_aula.create_client",
         side_effect=AulaConnectionError("Connection failed", 0),
     ):
         entry = _create_config_entry(hass)
@@ -93,7 +93,7 @@ async def test_setup_entry_profile_auth_error(
     hass: HomeAssistant,
 ) -> None:
     """Test setup fails when get_profile raises auth error."""
-    with patch("custom_components.aula.create_client") as mock_create:
+    with patch("custom_components.hass_aula.create_client") as mock_create:
         client = AsyncMock()
         client.get_profile = AsyncMock(
             side_effect=AulaAuthenticationError("Auth failed", 401)
@@ -113,7 +113,7 @@ async def test_setup_entry_profile_connection_error(
     hass: HomeAssistant,
 ) -> None:
     """Test setup retries when get_profile raises connection error."""
-    with patch("custom_components.aula.create_client") as mock_create:
+    with patch("custom_components.hass_aula.create_client") as mock_create:
         client = AsyncMock()
         client.get_profile = AsyncMock(
             side_effect=AulaConnectionError("Connection failed", 0)
@@ -156,7 +156,7 @@ async def test_stale_device_removal(
     child2 = mock_child(child_id=2, name="Child 2")
     profile_with_two = mock_profile(children=[child1, child2])
 
-    with patch("custom_components.aula.create_client") as mock_create:
+    with patch("custom_components.hass_aula.create_client") as mock_create:
         client = AsyncMock()
         client.get_profile = AsyncMock(return_value=profile_with_two)
         client.get_daily_overview = AsyncMock(return_value=None)
