@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
-
 from aula import (
     AulaAuthenticationError,
     AulaConnectionError,
@@ -15,6 +12,8 @@ from aula import (
     create_client,
 )
 from aula.http_httpx import HttpxHttpClient
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_TOKEN_DATA, DOMAIN, LOGGER, PLATFORMS
 from .coordinator import AulaCalendarCoordinator, AulaPresenceCoordinator
@@ -27,7 +26,11 @@ if TYPE_CHECKING:
 
 
 def _create_http_client(cookies: dict) -> HttpxHttpClient:
-    """Create HTTP client in a thread to avoid blocking SSL cert loading on the event loop."""
+    """
+    Create HTTP client in a thread.
+
+    Avoids blocking SSL cert loading on the event loop.
+    """
     return HttpxHttpClient(cookies=cookies)
 
 
