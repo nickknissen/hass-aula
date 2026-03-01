@@ -9,7 +9,11 @@ if TYPE_CHECKING:
     from aula import AulaApiClient, Profile
     from homeassistant.config_entries import ConfigEntry
 
-    from .coordinator import AulaCalendarCoordinator, AulaPresenceCoordinator
+    from .coordinator import (
+        AulaCalendarCoordinator,
+        AulaNotificationsCoordinator,
+        AulaPresenceCoordinator,
+    )
 
 type AulaConfigEntry = ConfigEntry[AulaRuntimeData]
 
@@ -22,3 +26,4 @@ class AulaRuntimeData:
     profile: Profile
     presence_coordinator: AulaPresenceCoordinator
     calendar_coordinator: AulaCalendarCoordinator
+    notifications_coordinator: AulaNotificationsCoordinator

@@ -14,11 +14,17 @@ from aula import (
     CalendarEvent,
     DailyOverview,
 )
+from aula.models import Notification
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import CALENDAR_POLL_INTERVAL, LOGGER, PRESENCE_POLL_INTERVAL
+from .const import (
+    CALENDAR_POLL_INTERVAL,
+    LOGGER,
+    NOTIFICATIONS_POLL_INTERVAL,
+    PRESENCE_POLL_INTERVAL,
+)
 
 if TYPE_CHECKING:
     from aula import AulaApiClient, Profile
@@ -128,3 +134,42 @@ class AulaCalendarCoordinator(
             raise UpdateFailed(msg) from err
         else:
             return result
+
+
+class AulaNotificationsCoordinator(
+    DataUpdateCoordinator[list[Notification]],
+):
+    """Coordinator for fetching notifications for the active profile."""
+
+    config_entry: AulaConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+    ) -> None:
+        """Initialize the notifications coordinator."""
+        super().__init__(
+            hass,
+            logger=LOGGER,
+            name="Aula Notifications",
+            update_interval=timedelta(seconds=NOTIFICATIONS_POLL_INTERVAL),
+        )
+        self.client = client
+
+    async def _async_update_data(self) -> list[Notification]:
+        """Fetch notifications for the active profile."""
+        try:
+            notifications = await self.client.get_notifications_for_active_profile(
+                limit=50
+            )
+        except AulaAuthenticationError as err:
+            raise ConfigEntryAuthFailed(
+                translation_domain="hass_aula",
+                translation_key="auth_failed",
+            ) from err
+        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+            msg = f"Error communicating with Aula API: {err}"
+            raise UpdateFailed(msg) from err
+        else:
+            return notifications

@@ -8,17 +8,18 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
-from .entity import AulaEntity
+from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
-    from aula import Child, DailyOverview
+    from aula import Child, DailyOverview, Profile
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from .coordinator import AulaPresenceCoordinator
+    from .coordinator import AulaNotificationsCoordinator, AulaPresenceCoordinator
     from .data import AulaConfigEntry
 
 
@@ -44,14 +45,19 @@ async def async_setup_entry(
     entry: AulaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Aula presence sensors."""
-    coordinator = entry.runtime_data.presence_coordinator
+    """Set up Aula sensors."""
+    presence_coordinator = entry.runtime_data.presence_coordinator
+    notifications_coordinator = entry.runtime_data.notifications_coordinator
     profile = entry.runtime_data.profile
 
-    async_add_entities(
-        AulaPresenceSensor(coordinator=coordinator, child=child)
+    entities: list[SensorEntity] = [
+        AulaPresenceSensor(coordinator=presence_coordinator, child=child)
         for child in profile.children
+    ]
+    entities.append(
+        AulaNotificationsSensor(coordinator=notifications_coordinator, profile=profile)
     )
+    async_add_entities(entities)
 
 
 class AulaPresenceSensor(AulaEntity, SensorEntity):
@@ -90,4 +96,35 @@ class AulaPresenceSensor(AulaEntity, SensorEntity):
             "entry_time": overview.entry_time,
             "exit_time": overview.exit_time,
             "location": overview.location,
+        }
+
+
+class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
+    """Sensor showing unread notification count for the active profile."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_translation_key = "unread_notifications"
+
+    def __init__(
+        self,
+        coordinator: AulaNotificationsCoordinator,
+        profile: Profile,
+    ) -> None:
+        """Initialize the notifications sensor."""
+        super().__init__(coordinator, profile)
+        self._attr_unique_id = f"{profile.profile_id}_unread_notifications"
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of unread notifications."""
+        notifications = self.coordinator.data or []
+        return sum(1 for n in notifications if n.is_read is False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return total count and recent notification titles."""
+        notifications = self.coordinator.data or []
+        return {
+            "total": len(notifications),
+            "recent": [n.title for n in notifications[:5]],
         }

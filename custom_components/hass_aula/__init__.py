@@ -16,14 +16,23 @@ from aula.http_httpx import HttpxHttpClient
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_TOKEN_DATA, DOMAIN, LOGGER, PLATFORMS
-from .coordinator import AulaCalendarCoordinator, AulaPresenceCoordinator
+from .const import CONF_TOKEN_DATA, CONF_WIDGETS, DOMAIN, LOGGER, PLATFORMS
+from .coordinator import (
+    AulaCalendarCoordinator,
+    AulaNotificationsCoordinator,
+    AulaPresenceCoordinator,
+)
 from .data import AulaRuntimeData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
+
+
+def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
+    """Return True if the given widget ID is selected in the config entry."""
+    return widget_id in entry.data.get(CONF_WIDGETS, [])
 
 
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
@@ -72,10 +81,12 @@ async def async_setup_entry(
 
     presence_coordinator = AulaPresenceCoordinator(hass, client, profile)
     calendar_coordinator = AulaCalendarCoordinator(hass, client, profile)
+    notifications_coordinator = AulaNotificationsCoordinator(hass, client)
 
     await asyncio.gather(
         presence_coordinator.async_config_entry_first_refresh(),
         calendar_coordinator.async_config_entry_first_refresh(),
+        notifications_coordinator.async_config_entry_first_refresh(),
     )
 
     entry.runtime_data = AulaRuntimeData(
@@ -83,6 +94,7 @@ async def async_setup_entry(
         profile=profile,
         presence_coordinator=presence_coordinator,
         calendar_coordinator=calendar_coordinator,
+        notifications_coordinator=notifications_coordinator,
     )
 
     _async_remove_stale_devices(hass, entry)
@@ -110,12 +122,13 @@ def _async_remove_stale_devices(
     """Remove devices for children no longer in the profile."""
     device_registry = dr.async_get(hass)
     profile = entry.runtime_data.profile
-    current_child_ids = {(DOMAIN, str(child.id)) for child in profile.children}
+    current_ids = {(DOMAIN, str(child.id)) for child in profile.children}
+    current_ids.add((DOMAIN, f"profile_{profile.profile_id}"))
 
     for device_entry in dr.async_entries_for_config_entry(
         device_registry, entry.entry_id
     ):
-        if not device_entry.identifiers & current_child_ids:
+        if not device_entry.identifiers & current_ids:
             LOGGER.info(
                 "Removing stale device %s (%s)",
                 device_entry.name,
