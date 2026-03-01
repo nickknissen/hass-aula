@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 
 from .const import LOGGER
 
+if TYPE_CHECKING:
+    import qrcode
 
-def generate_animated_qr_svg(qr1: Any, qr2: Any) -> str:
+
+def generate_animated_qr_svg(qr1: qrcode.QRCode[Any], qr2: qrcode.QRCode[Any]) -> str:
     """
     Generate an animated SVG that alternates between two QR codes.
 

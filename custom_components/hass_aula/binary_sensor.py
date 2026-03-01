@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from aula.models.presence import PresenceState
 from homeassistant.components.binary_sensor import (
@@ -15,6 +15,7 @@ from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
+    from aula import Child
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -60,7 +61,7 @@ class AulaPresenceBinarySensor(AulaEntity, BinarySensorEntity):
     def __init__(
         self,
         coordinator: AulaPresenceCoordinator,
-        child: Any,
+        child: Child,
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator, child)

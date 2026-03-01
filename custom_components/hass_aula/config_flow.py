@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from aula import WidgetConfiguration, authenticate, create_client
@@ -18,6 +18,9 @@ from slugify import slugify
 
 from .const import CONF_MITID_USERNAME, CONF_TOKEN_DATA, CONF_WIDGETS, DOMAIN, LOGGER
 from .qr_view import AulaQRView, generate_animated_qr_svg
+
+if TYPE_CHECKING:
+    import qrcode
 
 
 class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
@@ -320,7 +323,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
     async def _async_authenticate(self) -> dict[str, Any]:
         """Run MitID authentication in background."""
 
-        def on_qr_codes(qr1: Any, qr2: Any) -> None:
+        def on_qr_codes(qr1: qrcode.QRCode[Any], qr2: qrcode.QRCode[Any]) -> None:
             LOGGER.debug(
                 "on_qr_codes called: qr1=%s, qr2=%s, _qr_view=%s",
                 type(qr1).__name__,

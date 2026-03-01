@@ -26,12 +26,8 @@ if TYPE_CHECKING:
     from .data import AulaConfigEntry
 
 
-def _create_http_client(cookies: dict) -> HttpxHttpClient:
-    """
-    Create HTTP client in a thread.
-
-    Avoids blocking SSL cert loading on the event loop.
-    """
+def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
+    """Create HTTP client in a thread to avoid blocking SSL cert loading."""
     return HttpxHttpClient(cookies=cookies)
 
 

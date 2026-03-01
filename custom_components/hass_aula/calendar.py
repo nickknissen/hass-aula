@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from aula import (
     AulaAuthenticationError,
@@ -18,6 +18,7 @@ from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
+    from aula import Child
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -67,7 +68,7 @@ class AulaCalendarEntity(AulaEntity, CalendarEntity):
     def __init__(
         self,
         coordinator: AulaCalendarCoordinator,
-        child: Any,
+        child: Child,
     ) -> None:
         """Initialize the calendar entity."""
         super().__init__(coordinator, child)

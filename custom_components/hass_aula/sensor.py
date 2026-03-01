@@ -14,7 +14,7 @@ from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
-    from aula import DailyOverview
+    from aula import Child, DailyOverview
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -62,7 +62,7 @@ class AulaPresenceSensor(AulaEntity, SensorEntity):
     def __init__(
         self,
         coordinator: AulaPresenceCoordinator,
-        child: Any,
+        child: Child,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, child)

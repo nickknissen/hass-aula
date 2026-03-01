@@ -150,3 +150,19 @@ rules:
   stale-devices:
     status: done
     comment: Devices for removed children are cleaned up on setup.
+
+  # Platinum tier
+  async-dependency:
+    status: done
+    comment: The aula library uses httpx.AsyncClient throughout and ships py.typed.
+  inject-websession:
+    status: done
+    comment: >
+      HttpxHttpClient is created by the integration (in an executor thread to avoid
+      blocking SSL cert loading) and injected into create_client() via the http_client
+      parameter. The library supports external session injection.
+  strict-typing:
+    status: done
+    comment: >
+      All entity constructors use Child instead of Any. QR callbacks use
+      qrcode.QRCode[Any]. py.typed marker added. mypy strict config added.
