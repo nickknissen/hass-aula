@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""Release script: sets version, generates changelog via Claude (haiku), tags and creates GitHub release."""
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+MANIFEST = Path(__file__).parent.parent / "custom_components" / "hass_aula" / "manifest.json"
+
+
+def run(cmd: list[str], capture: bool = False) -> subprocess.CompletedProcess:
+    result = subprocess.run(cmd, capture_output=capture, text=True)
+    if result.returncode != 0:
+        print(f"Error running {' '.join(cmd)}", file=sys.stderr)
+        if capture:
+            print(result.stderr, file=sys.stderr)
+        sys.exit(1)
+    return result
+
+
+def get_current_version() -> str:
+    return json.loads(MANIFEST.read_text())["version"]
+
+
+def set_version(new_version: str) -> None:
+    manifest = json.loads(MANIFEST.read_text())
+    manifest["version"] = new_version
+    MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"Updated manifest.json to version {new_version}")
+
+
+def get_commits_since_last_tag() -> tuple[str, str | None]:
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0"],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        last_tag = result.stdout.strip()
+        log = run(["git", "log", f"{last_tag}..HEAD", "--pretty=format:%s"], capture=True)
+    else:
+        log = run(["git", "log", "--pretty=format:%s"], capture=True)
+        last_tag = None
+
+    commits = log.stdout.strip()
+    if not commits:
+        print("No commits found since last tag.", file=sys.stderr)
+        sys.exit(1)
+
+    return commits, last_tag
+
+
+def generate_changelog(commits: str, new_version: str) -> str:
+    import os
+
+    prompt = (
+        f"You are a technical writer generating a GitHub release changelog for a Home Assistant integration called 'hass-aula'.\n"
+        f"Based on the following git commit messages, write a concise, user-friendly changelog for version {new_version}.\n"
+        f"Group changes into sections: ## What's New, ## Fixes, ## Other (only include sections that apply).\n"
+        f"Use bullet points. Be brief and clear. Output only the changelog markdown, no preamble.\n\n"
+        f"Commits:\n{commits}"
+    )
+
+    # Strip CLAUDECODE so we can spawn a nested claude process
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+
+    print("Generating changelog with Claude (haiku)...")
+    result = subprocess.run(
+        ["claude", "--model", "haiku", "-p", "--dangerously-skip-permissions", prompt],
+        capture_output=True, text=True, env=env,
+    )
+    if result.returncode != 0:
+        print("Claude error:", result.stderr, file=sys.stderr)
+        sys.exit(1)
+    return result.stdout.strip()
+
+
+def commit_manifest(version: str) -> None:
+    run(["git", "add", str(MANIFEST)])
+    run(["git", "commit", "-m", f"chore: bump version to {version}"])
+    print("Committed version bump")
+
+
+def create_tag(version: str) -> None:
+    tag = f"v{version}"
+    run(["git", "tag", tag])
+    print(f"Created tag {tag}")
+
+
+def push(version: str) -> None:
+    run(["git", "push"])
+    run(["git", "push", "origin", f"v{version}"])
+    print("Pushed commits and tag")
+
+
+def create_github_release(version: str, changelog: str) -> None:
+    print("Creating GitHub release...")
+    run([
+        "gh", "release", "create", f"v{version}",
+        "--title", f"Release v{version}",
+        "--notes", changelog,
+    ])
+    print(f"GitHub release v{version} created.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Create a new release")
+    parser.add_argument("version", help="New version to release, e.g. 1.2.3")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print changelog and new version without making any changes",
+    )
+    args = parser.parse_args()
+
+    version = args.version.lstrip("v")
+
+    # Ensure clean working tree (skip for dry-run)
+    if not args.dry_run:
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        if status.stdout.strip():
+            print("Working tree is not clean. Commit or stash changes first.", file=sys.stderr)
+            sys.exit(1)
+
+    current = get_current_version()
+    print(f"Current version: {current} -> {version}")
+
+    commits, last_tag = get_commits_since_last_tag()
+    print(f"Commits since {last_tag or 'beginning'}:\n{commits}\n")
+
+    changelog = generate_changelog(commits, version)
+    print(f"\n--- Changelog ---\n{changelog}\n-----------------\n")
+
+    if args.dry_run:
+        print("Dry run — no changes made.")
+        return
+
+    set_version(version)
+    commit_manifest(version)
+    create_tag(version)
+    push(version)
+    create_github_release(version, changelog)
+
+    print(f"\nRelease v{version} complete!")
+
+
+if __name__ == "__main__":
+    main()
