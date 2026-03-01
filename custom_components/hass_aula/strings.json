@@ -9,7 +9,7 @@
       },
       "mitid_auth": {
         "title": "MitID Authentication",
-        "description": "Generating QR code, please wait..."
+        "description": "Open the MitID app and approve the login request."
       },
       "mitid_qr": {
         "title": "Scan QR Code",
@@ -34,7 +34,7 @@
       }
     },
     "progress": {
-      "authenticating": "Generating QR code, please wait..."
+      "authenticating": "Open the MitID app and approve the login request."
     },
     "error": {
       "auth_failed": "MitID authentication failed. Please try again.",

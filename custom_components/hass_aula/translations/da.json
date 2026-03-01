@@ -9,7 +9,7 @@
       },
       "mitid_auth": {
         "title": "MitID Godkendelse",
-        "description": "Genererer QR-kode, vent venligst..."
+        "description": "Åbn MitID-appen og godkend login."
       },
       "mitid_qr": {
         "title": "Scan QR-kode",
@@ -34,7 +34,7 @@
       }
     },
     "progress": {
-      "authenticating": "Genererer QR-kode, vent venligst..."
+      "authenticating": "Åbn MitID-appen og godkend login."
     },
     "error": {
       "auth_failed": "MitID-godkendelse mislykkedes. Prøv venligst igen.",
