@@ -16,10 +16,10 @@
         "description": "Open your MitID app and scan the animated QR code below. Approve the login on your phone, then click **Submit**.\n\n![MitID QR Code]({qr_url})"
       },
       "select_widgets": {
-        "title": "Select Widgets",
-        "description": "Choose which Aula widgets to enable for this integration.",
+        "title": "Select Data Providers",
+        "description": "Select which widget data providers to pull data from.",
         "data": {
-          "widgets": "Widgets"
+          "widgets": "Data providers"
         }
       },
       "reauth_confirm": {
