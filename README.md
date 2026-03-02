@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/nickknissen/hass-aula)](LICENSE)
 [![GitHub Issues](https://img.shields.io/github/issues/nickknissen/hass-aula)](https://github.com/nickknissen/hass-aula/issues)
 
-A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish school communication platform. Track your children's school presence, check-in/out times, and school calendar directly in Home Assistant.
+A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish school communication platform. Track your children's school presence and school calendar directly in Home Assistant.
 
 > **Note:** Aula is a Danish platform. Authentication requires a Danish **MitID** account.
 
@@ -13,10 +13,7 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 
 ## Features
 
-- **Presence tracking** — Know whether your child is present, sick, absent, on a field trip, or checked out
-- **Check-in / check-out times** — See exactly when your child arrived and left school
-- **Entry / exit times** — Track building entry and exit separately
-- **Location** — Current location reported by the school
+- **Presence tracking** — Know whether your child is present, sick, absent, on a field trip, or checked out, with check-in/out times, entry/exit times, and location as attributes
 - **School calendar** — Upcoming events including teacher, substitute, and location info
 - **Notifications** — Fires a Home Assistant event for each new Aula notification, enabling automations to push alerts to your phone
 - **Multi-child support** — Each child gets their own device with a full set of entities
@@ -73,20 +70,21 @@ The following entities are created **per child**:
 
 ### Sensors
 
-| Entity | Description | Default |
-|--------|-------------|---------|
-| `sensor.<child>_presence` | Current presence status | Enabled |
-| `sensor.<child>_check_in_time` | Time the child checked in | Enabled |
-| `sensor.<child>_check_out_time` | Time the child checked out | Enabled |
-| `sensor.<child>_entry_time` | Time the child entered the building | Disabled |
-| `sensor.<child>_exit_time` | Time the child exited the building | Disabled |
-| `sensor.<child>_location` | Current reported location | Disabled |
+**Per child:**
 
-The following entities are created **per profile** (parent account):
+| Entity | Description |
+|--------|-------------|
+| `sensor.<child>_presence` | Current presence status (see values below) |
 
-| Entity | Description | Default |
-|--------|-------------|---------|
-| `sensor.<profile>_unread_notifications` | Number of unread Aula notifications | Enabled |
+**Presence sensor attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `check_in_time` | Time the child checked in |
+| `check_out_time` | Time the child checked out |
+| `entry_time` | Time the child entered the building |
+| `exit_time` | Time the child exited the building |
+| `location` | Current reported location |
 
 **Presence status values:**
 
@@ -101,6 +99,19 @@ The following entities are created **per profile** (parent account):
 | `spare_time_activity` | In a spare time activity |
 | `physical_placement` | Physical placement |
 | `checked_out` | Checked out |
+
+**Per profile (parent account):**
+
+| Entity | Description |
+|--------|-------------|
+| `sensor.<profile>_unread_notifications` | Number of unread Aula notifications |
+
+**Unread notifications sensor attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `total` | Total number of notifications |
+| `recent` | List of the 5 most recent notification titles |
 
 ### Calendar
 
@@ -137,8 +148,8 @@ automation:
   - alias: "Child arrived at school"
     trigger:
       - platform: state
-        entity_id: binary_sensor.emma_present
-        to: "on"
+        entity_id: sensor.emma_presence
+        to: "present"
     action:
       - service: notify.mobile_app_my_phone
         data:
