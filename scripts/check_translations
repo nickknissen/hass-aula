@@ -27,8 +27,9 @@ def main() -> int:
     base_keys = leaf_paths(base)
 
     errors: list[str] = []
+    translation_files = sorted(TRANSLATIONS.glob("*.json"))
 
-    for translation_file in sorted(TRANSLATIONS.glob("*.json")):
+    for translation_file in translation_files:
         lang = translation_file.stem
         translation = json.loads(translation_file.read_text())
         translation_keys = leaf_paths(translation)
@@ -44,8 +45,7 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    translation_count = len(list(TRANSLATIONS.glob("*.json")))
-    print(f"OK: {translation_count} translation file(s) in sync with strings.json")
+    print(f"OK: {len(translation_files)} translation file(s) in sync with strings.json")
     return 0
 
 
