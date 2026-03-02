@@ -32,3 +32,6 @@ jobs:
 
       - name: Format
         run: python3 -m ruff format . --check
+
+      - name: Check translations
+        run: python3 scripts/check_translations

@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Check that all translation files are in sync with strings.json."""
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+STRINGS = ROOT / "custom_components" / "hass_aula" / "strings.json"
+TRANSLATIONS = ROOT / "custom_components" / "hass_aula" / "translations"
+
+
+def leaf_paths(obj: dict, prefix: str = "") -> set[str]:
+    """Recursively collect all leaf key paths in dot notation."""
+    paths: set[str] = set()
+    for key, value in obj.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            paths.update(leaf_paths(value, path))
+        else:
+            paths.add(path)
+    return paths
+
+
+def main() -> int:
+    base = json.loads(STRINGS.read_text())
+    base_keys = leaf_paths(base)
+
+    errors: list[str] = []
+
+    for translation_file in sorted(TRANSLATIONS.glob("*.json")):
+        lang = translation_file.stem
+        translation = json.loads(translation_file.read_text())
+        translation_keys = leaf_paths(translation)
+
+        for key in sorted(base_keys - translation_keys):
+            errors.append(f"{lang}: missing key '{key}'")
+
+        for key in sorted(translation_keys - base_keys):
+            errors.append(f"{lang}: extra key not in strings.json '{key}'")
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    translation_count = len(list(TRANSLATIONS.glob("*.json")))
+    print(f"OK: {translation_count} translation file(s) in sync with strings.json")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
