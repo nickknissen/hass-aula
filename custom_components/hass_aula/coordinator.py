@@ -21,6 +21,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CALENDAR_POLL_INTERVAL,
+    EVENT_NOTIFICATION,
     LOGGER,
     NOTIFICATIONS_POLL_INTERVAL,
     PRESENCE_POLL_INTERVAL,
@@ -156,6 +157,7 @@ class AulaNotificationsCoordinator(
             update_interval=timedelta(seconds=NOTIFICATIONS_POLL_INTERVAL),
         )
         self.client = client
+        self._known_ids: set[str] | None = None
 
     async def _async_update_data(self) -> list[Notification]:
         """Fetch notifications for the active profile."""
@@ -171,5 +173,26 @@ class AulaNotificationsCoordinator(
         except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
             msg = f"Error communicating with Aula API: {err}"
             raise UpdateFailed(msg) from err
+
+        new_ids = {n.id for n in notifications}
+        if self._known_ids is None:
+            # First fetch — populate without firing events
+            self._known_ids = new_ids
         else:
-            return notifications
+            for n in notifications:
+                if n.id not in self._known_ids:
+                    self.hass.bus.async_fire(
+                        EVENT_NOTIFICATION,
+                        {
+                            "notification_id": n.id,
+                            "title": n.title,
+                            "module": n.module,
+                            "event_type": n.event_type,
+                            "related_child_name": n.related_child_name,
+                            "created_at": n.created_at,
+                            "is_read": n.is_read,
+                        },
+                    )
+            self._known_ids = new_ids
+
+        return notifications

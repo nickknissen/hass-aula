@@ -11,10 +11,34 @@ from homeassistant.data_entry_flow import FlowResultType
 from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
     CONF_TOKEN_DATA,
+    CONF_WIDGETS,
     DOMAIN,
 )
 
-from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME
+from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, make_config_entry
+
+# Patch target for widget fetching (avoids network calls in tests)
+_FETCH_WIDGETS = "custom_components.hass_aula.config_flow.AulaFlowHandler._async_fetch_widgets"
+
+
+async def _advance_to_select_widgets(hass, flow_id):
+    """Drive the flow from SHOW_PROGRESS (if any) to the select_widgets FORM.
+
+    With an eager mock, auth may complete synchronously and we go straight to
+    FORM.  With a slower mock we get SHOW_PROGRESS first.  This helper handles
+    both so individual tests stay focused on what they're actually testing.
+    """
+    # Let any in-flight tasks run (needed when auth is truly async)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.flow.async_configure(flow_id)
+
+    # If we're still in progress, let tasks run and poll once more
+    if result["type"] is FlowResultType.SHOW_PROGRESS:
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(flow_id)
+
+    return result
 
 
 async def test_user_flow_success(
@@ -29,27 +53,31 @@ async def test_user_flow_success(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
 
-    with patch(
-        "custom_components.hass_aula.config_flow.authenticate",
-        return_value=MOCK_TOKEN_DATA,
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
     ):
+        # Submit username
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
         )
 
-        # Should show progress for MitID auth
-        # The auth task completes immediately in tests since authenticate is mocked
-        # We need to wait for the progress to complete
+        # Advance through any progress steps to select_widgets
         if result["type"] is FlowResultType.SHOW_PROGRESS:
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+            result = await _advance_to_select_widgets(hass, result["flow_id"])
 
-        if result["type"] is FlowResultType.SHOW_PROGRESS_DONE:
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_widgets"
+
+        # Submit widget selection → CREATE_ENTRY
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: []},
+        )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == MOCK_USERNAME
@@ -62,33 +90,33 @@ async def test_user_flow_duplicate(
     mock_setup_entry: AsyncMock,
 ) -> None:
     """Test user flow aborts for duplicate entry."""
-    # First, set up an existing entry
-    with patch(
-        "custom_components.hass_aula.config_flow.authenticate",
-        return_value=MOCK_TOKEN_DATA,
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
     ):
+        # Complete first install
         result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_USER},
+            DOMAIN, context={"source": SOURCE_USER}
         )
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
         )
-        # Complete the flow
-        while result["type"] in (
-            FlowResultType.SHOW_PROGRESS,
-            FlowResultType.SHOW_PROGRESS_DONE,
-        ):
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            result = await _advance_to_select_widgets(hass, result["flow_id"])
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_widgets"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_WIDGETS: []}
+        )
         assert result["type"] is FlowResultType.CREATE_ENTRY
 
-    # Now try to add the same account
+    # Try to add the same account again
     result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_USER},
+        DOMAIN, context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -104,8 +132,7 @@ async def test_user_flow_auth_failure(
 ) -> None:
     """Test user flow handles auth failure."""
     result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_USER},
+        DOMAIN, context={"source": SOURCE_USER}
     )
 
     with patch(
@@ -117,11 +144,10 @@ async def test_user_flow_auth_failure(
             user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
         )
 
-        # Progress should eventually abort
-        while result["type"] is FlowResultType.SHOW_PROGRESS:
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+        # May get SHOW_PROGRESS or ABORT depending on task timing
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(result["flow_id"])
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "auth_failed"
@@ -132,24 +158,16 @@ async def test_reauth_flow(
     mock_setup_entry: AsyncMock,
 ) -> None:
     """Test reauth flow."""
-    # Create an existing entry
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
+    entry = make_config_entry()
     entry.add_to_hass(hass)
 
-    result = await entry.start_reauth_flow(hass)
+    await entry.start_reauth_flow(hass)
+    await hass.async_block_till_done()
+    flows = hass.config_entries.flow.async_progress()
+    assert len(flows) == 1
+    flow_id = flows[0]["flow_id"]
+
+    result = await hass.config_entries.flow.async_configure(flow_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
 
@@ -162,14 +180,9 @@ async def test_reauth_flow(
             user_input={},
         )
 
-        # Complete the auth flow
-        while result["type"] in (
-            FlowResultType.SHOW_PROGRESS,
-            FlowResultType.SHOW_PROGRESS_DONE,
-        ):
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(flow_id)
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
@@ -180,25 +193,13 @@ async def test_reconfigure_flow(
     mock_setup_entry: AsyncMock,
 ) -> None:
     """Test reconfigure flow."""
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
+    entry = make_config_entry()
     entry.add_to_hass(hass)
 
     result = await entry.start_reconfigure_flow(hass)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reconfigure"
+    flow_id = result["flow_id"]
 
     new_username = "new_user"
     with patch(
@@ -206,17 +207,13 @@ async def test_reconfigure_flow(
         return_value=MOCK_TOKEN_DATA,
     ):
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
+            flow_id,
             user_input={CONF_MITID_USERNAME: new_username},
         )
 
-        while result["type"] in (
-            FlowResultType.SHOW_PROGRESS,
-            FlowResultType.SHOW_PROGRESS_DONE,
-        ):
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-            )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(flow_id)
 
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "reauth_successful"
+    assert result["reason"] == "reconfigure_successful"

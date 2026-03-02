@@ -49,6 +49,9 @@
   },
   "entity": {
     "sensor": {
+      "unread_notifications": {
+        "name": "Ulæste notifikationer"
+      },
       "presence_status": {
         "name": "Tilstedeværelsesstatus",
         "state": {
@@ -62,11 +65,6 @@
           "physical_placement": "Fysisk placering",
           "checked_out": "Gået"
         }
-      }
-    },
-    "binary_sensor": {
-      "is_present": {
-        "name": "Til stede"
       }
     },
     "calendar": {

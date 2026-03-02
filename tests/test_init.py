@@ -7,41 +7,11 @@ from unittest.mock import AsyncMock, patch
 from aula import AulaAuthenticationError, AulaConnectionError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
-from custom_components.hass_aula.const import (
-    CONF_MITID_USERNAME,
-    CONF_TOKEN_DATA,
-    DOMAIN,
-)
+from custom_components.hass_aula.const import DOMAIN
 
-from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, mock_child, mock_profile
-
-
-async def _setup_entry(hass: HomeAssistant) -> None:
-    """Create and set up a config entry."""
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-
-def _create_config_entry(hass: HomeAssistant):
-    """Create a config entry and add it to HA."""
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
-    entry.add_to_hass(hass)
-    return entry
+from .conftest import make_config_entry, mock_child, mock_profile
 
 
 async def test_setup_entry(
@@ -49,7 +19,8 @@ async def test_setup_entry(
     mock_aula_client: AsyncMock,
 ) -> None:
     """Test successful setup of a config entry."""
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
 
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -67,7 +38,8 @@ async def test_setup_entry_auth_error(
         "custom_components.hass_aula.create_client",
         side_effect=AulaAuthenticationError("Auth failed", 401),
     ):
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -82,7 +54,8 @@ async def test_setup_entry_connection_error(
         "custom_components.hass_aula.create_client",
         side_effect=AulaConnectionError("Connection failed", 0),
     ):
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -101,7 +74,8 @@ async def test_setup_entry_profile_auth_error(
         client.close = AsyncMock()
         mock_create.return_value = client
 
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -121,7 +95,8 @@ async def test_setup_entry_profile_connection_error(
         client.close = AsyncMock()
         mock_create.return_value = client
 
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -134,7 +109,8 @@ async def test_unload_entry(
     mock_aula_client: AsyncMock,
 ) -> None:
     """Test successful unload of a config entry."""
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
 
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -161,10 +137,12 @@ async def test_stale_device_removal(
         client.get_profile = AsyncMock(return_value=profile_with_two)
         client.get_daily_overview = AsyncMock(return_value=None)
         client.get_calendar_events = AsyncMock(return_value=[])
+        client.get_notifications_for_active_profile = AsyncMock(return_value=[])
         client.close = AsyncMock()
         mock_create.return_value = client
 
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -178,7 +156,7 @@ async def test_stale_device_removal(
         await hass.async_block_till_done()
 
         # Verify second child device was removed
-        device_registry = hass.helpers.device_registry.async_get(hass)
+        device_registry = dr.async_get(hass)
         devices = [
             d
             for d in device_registry.devices.values()

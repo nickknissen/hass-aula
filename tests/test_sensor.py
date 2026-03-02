@@ -8,37 +8,7 @@ from unittest.mock import AsyncMock
 from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
 
-from custom_components.hass_aula.const import (
-    CONF_MITID_USERNAME,
-    CONF_TOKEN_DATA,
-    DOMAIN,
-)
-
-from .conftest import (
-    MOCK_TOKEN_DATA,
-    MOCK_USERNAME,
-    mock_daily_overview,
-)
-
-
-def _create_config_entry(hass: HomeAssistant):
-    """Create a config entry and add it to HA."""
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
-    entry.add_to_hass(hass)
-    return entry
+from .conftest import make_config_entry, mock_daily_overview
 
 
 async def test_presence_status_sensor(
@@ -49,7 +19,8 @@ async def test_presence_status_sensor(
     overview = mock_daily_overview(status=PresenceState.PRESENT)
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -66,7 +37,8 @@ async def test_presence_status_sick(
     overview = mock_daily_overview(status=PresenceState.SICK)
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -83,7 +55,8 @@ async def test_presence_status_not_present(
     overview = mock_daily_overview(status=PresenceState.NOT_PRESENT)
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -110,7 +83,8 @@ async def test_presence_sensor_attributes(
     )
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -130,7 +104,8 @@ async def test_sensor_unavailable_when_no_overview(
     """Test sensors show unavailable when overview is None."""
     mock_aula_client.get_daily_overview = AsyncMock(return_value=None)
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -160,7 +135,8 @@ async def test_all_presence_states(
         overview = mock_daily_overview(status=presence_state)
         mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
 
-        entry = _create_config_entry(hass)
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 

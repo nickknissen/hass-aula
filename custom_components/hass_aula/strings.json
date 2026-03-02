@@ -49,6 +49,9 @@
   },
   "entity": {
     "sensor": {
+      "unread_notifications": {
+        "name": "Unread notifications"
+      },
       "presence_status": {
         "name": "Presence status",
         "state": {
@@ -62,11 +65,6 @@
           "physical_placement": "Physical placement",
           "checked_out": "Checked out"
         }
-      }
-    },
-    "binary_sensor": {
-      "is_present": {
-        "name": "Present"
       }
     },
     "calendar": {

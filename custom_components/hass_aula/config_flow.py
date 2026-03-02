@@ -365,7 +365,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         """Unregister the QR code HTTP view."""
         self._qr_view = None
 
-    async def async_abort(self, *, reason: str, **kwargs: Any) -> ConfigFlowResult:
+    def async_abort(self, *, reason: str, **kwargs: Any) -> ConfigFlowResult:
         """Handle flow abort - clean up resources."""
         self._unregister_qr_view()
         return super().async_abort(reason=reason, **kwargs)

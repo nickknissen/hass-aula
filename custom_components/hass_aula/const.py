@@ -10,6 +10,8 @@ LOGGER: Logger = getLogger(__package__)
 
 DOMAIN = "hass_aula"
 
+EVENT_NOTIFICATION = "hass_aula_notification"
+
 CONF_MITID_USERNAME = "mitid_username"
 CONF_TOKEN_DATA = "token_data"  # noqa: S105
 CONF_WIDGETS = "widgets"
@@ -27,7 +29,6 @@ WIDGET_HUSKELISTEN = "0062"
 PARALLEL_UPDATES = 1
 
 PLATFORMS: list[Platform] = [
-    Platform.BINARY_SENSOR,
     Platform.CALENDAR,
     Platform.SENSOR,
 ]

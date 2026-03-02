@@ -15,43 +15,23 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.hass_aula.const import (
-    CONF_MITID_USERNAME,
-    CONF_TOKEN_DATA,
-    DOMAIN,
-)
 from custom_components.hass_aula.coordinator import (
     AulaCalendarCoordinator,
     AulaPresenceCoordinator,
 )
 
 from .conftest import (
-    MOCK_TOKEN_DATA,
-    MOCK_USERNAME,
     mock_calendar_event,
     mock_daily_overview,
     mock_profile,
 )
 
 
-def _create_config_entry(hass: HomeAssistant):
-    """Create a config entry and add it to HA."""
-    from homeassistant.config_entries import ConfigEntry
+def _create_config_entry():
+    """Create a mock config entry for coordinator tests."""
+    from unittest.mock import MagicMock
 
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
-    entry.add_to_hass(hass)
-    return entry
+    return MagicMock()
 
 
 async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
@@ -63,7 +43,7 @@ async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
     profile = mock_profile()
     coordinator = AulaPresenceCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     data = await coordinator._async_update_data()
@@ -83,7 +63,7 @@ async def test_presence_coordinator_auth_error(hass: HomeAssistant) -> None:
     profile = mock_profile()
     coordinator = AulaPresenceCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -100,7 +80,7 @@ async def test_presence_coordinator_connection_error(hass: HomeAssistant) -> Non
     profile = mock_profile()
     coordinator = AulaPresenceCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(UpdateFailed):
@@ -117,7 +97,7 @@ async def test_presence_coordinator_server_error(hass: HomeAssistant) -> None:
     profile = mock_profile()
     coordinator = AulaPresenceCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(UpdateFailed):
@@ -134,7 +114,7 @@ async def test_presence_coordinator_rate_limit_error(hass: HomeAssistant) -> Non
     profile = mock_profile()
     coordinator = AulaPresenceCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(UpdateFailed):
@@ -150,7 +130,7 @@ async def test_calendar_coordinator_fetch(hass: HomeAssistant) -> None:
     profile = mock_profile()
     coordinator = AulaCalendarCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     data = await coordinator._async_update_data()
@@ -170,7 +150,7 @@ async def test_calendar_coordinator_auth_error(hass: HomeAssistant) -> None:
     profile = mock_profile()
     coordinator = AulaCalendarCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -187,7 +167,7 @@ async def test_calendar_coordinator_connection_error(hass: HomeAssistant) -> Non
     profile = mock_profile()
     coordinator = AulaCalendarCoordinator(hass, client, profile)
 
-    entry = _create_config_entry(hass)
+    entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(UpdateFailed):

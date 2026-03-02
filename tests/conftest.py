@@ -8,9 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aula import CalendarEvent, DailyOverview, Profile
+from aula.models import Notification
 from aula.models.child import Child
 from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.hass_aula.const import (
     CONF_MITID_USERNAME,
@@ -32,6 +34,28 @@ MOCK_TOKEN_DATA = {
     },
     "cookies": {},
 }
+
+
+@pytest.fixture(autouse=True)
+def enable_custom_integrations(hass: HomeAssistant) -> None:
+    """Enable custom integrations for all tests."""
+    from homeassistant import loader
+
+    hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+
+def make_config_entry(**kwargs) -> MockConfigEntry:
+    """Create a MockConfigEntry with default Aula test data."""
+    defaults = {
+        "domain": DOMAIN,
+        "data": {
+            CONF_MITID_USERNAME: MOCK_USERNAME,
+            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
+        },
+        "unique_id": "test_user",
+    }
+    defaults.update(kwargs)
+    return MockConfigEntry(**defaults)
 
 
 def mock_child(
@@ -104,6 +128,27 @@ def mock_calendar_event(
     return event
 
 
+def mock_notification(
+    notification_id: str = "1",
+    title: str = "Test",
+    module: str | None = "messaging",
+    event_type: str | None = None,
+    related_child_name: str | None = None,
+    created_at: str | None = None,
+    is_read: bool = False,
+) -> MagicMock:
+    """Create a mock Notification object."""
+    notification = MagicMock(spec=Notification)
+    notification.id = notification_id
+    notification.title = title
+    notification.module = module
+    notification.event_type = event_type
+    notification.related_child_name = related_child_name
+    notification.created_at = created_at
+    notification.is_read = is_read
+    return notification
+
+
 @pytest.fixture
 def mock_aula_client() -> Generator[AsyncMock]:
     """Create a mock AulaApiClient."""
@@ -114,6 +159,9 @@ def mock_aula_client() -> Generator[AsyncMock]:
         client.get_profile = AsyncMock(return_value=mock_profile())
         client.get_daily_overview = AsyncMock(return_value=mock_daily_overview())
         client.get_calendar_events = AsyncMock(return_value=[mock_calendar_event()])
+        client.get_notifications_for_active_profile = AsyncMock(
+            return_value=[mock_notification()]
+        )
         client.is_logged_in = AsyncMock(return_value=True)
         client.close = AsyncMock()
         mock_create.return_value = client
@@ -121,22 +169,9 @@ def mock_aula_client() -> Generator[AsyncMock]:
 
 
 @pytest.fixture
-def mock_config_entry(hass: HomeAssistant) -> MagicMock:
+def mock_config_entry() -> MockConfigEntry:
     """Create a mock config entry."""
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry_id"
-    entry.domain = DOMAIN
-    entry.title = MOCK_USERNAME
-    entry.unique_id = "test_user"
-    entry.data = {
-        CONF_MITID_USERNAME: MOCK_USERNAME,
-        CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-    }
-    entry.options = {}
-    entry.state = None
-    return entry
+    return make_config_entry()
 
 
 @pytest.fixture

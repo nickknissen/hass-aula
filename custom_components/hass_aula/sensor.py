@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 PRESENCE_SENSOR_DESCRIPTION = SensorEntityDescription(
     key="presence_status",
+    translation_key="presence_status",
     device_class=SensorDeviceClass.ENUM,
     options=[
         "not_present",

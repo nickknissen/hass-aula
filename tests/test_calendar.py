@@ -6,33 +6,7 @@ from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
 
-from custom_components.hass_aula.const import (
-    CONF_MITID_USERNAME,
-    CONF_TOKEN_DATA,
-    DOMAIN,
-)
-
-from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, mock_calendar_event
-
-
-def _create_config_entry(hass: HomeAssistant):
-    """Create a config entry and add it to HA."""
-    from homeassistant.config_entries import ConfigEntry
-
-    entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        domain=DOMAIN,
-        title=MOCK_USERNAME,
-        data={
-            CONF_MITID_USERNAME: MOCK_USERNAME,
-            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
-        },
-        source="user",
-        unique_id="test_user",
-    )
-    entry.add_to_hass(hass)
-    return entry
+from .conftest import make_config_entry, mock_calendar_event
 
 
 async def test_calendar_entity_created(
@@ -40,7 +14,8 @@ async def test_calendar_entity_created(
     mock_aula_client: AsyncMock,
 ) -> None:
     """Test calendar entity is created."""
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -60,7 +35,8 @@ async def test_calendar_with_events(
     )
     mock_aula_client.get_calendar_events = AsyncMock(return_value=[event])
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -75,7 +51,8 @@ async def test_calendar_empty(
     """Test calendar with no events."""
     mock_aula_client.get_calendar_events = AsyncMock(return_value=[])
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -98,7 +75,8 @@ async def test_calendar_event_with_substitute(
     )
     mock_aula_client.get_calendar_events = AsyncMock(return_value=[event])
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -118,7 +96,8 @@ async def test_calendar_event_with_location(
     )
     mock_aula_client.get_calendar_events = AsyncMock(return_value=[event])
 
-    entry = _create_config_entry(hass)
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 

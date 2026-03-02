@@ -18,6 +18,7 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 - **Entry / exit times** — Track building entry and exit separately
 - **Location** — Current location reported by the school
 - **School calendar** — Upcoming events including teacher, substitute, and location info
+- **Notifications** — Fires a Home Assistant event for each new Aula notification, enabling automations to push alerts to your phone
 - **Multi-child support** — Each child gets their own device with a full set of entities
 - **Automatic re-authentication** — Prompts for re-login when your session expires
 
@@ -81,6 +82,12 @@ The following entities are created **per child**:
 | `sensor.<child>_exit_time` | Time the child exited the building | Disabled |
 | `sensor.<child>_location` | Current reported location | Disabled |
 
+The following entities are created **per profile** (parent account):
+
+| Entity | Description | Default |
+|--------|-------------|---------|
+| `sensor.<profile>_unread_notifications` | Number of unread Aula notifications | Enabled |
+
 **Presence status values:**
 
 | Value | Meaning |
@@ -95,17 +102,29 @@ The following entities are created **per child**:
 | `physical_placement` | Physical placement |
 | `checked_out` | Checked out |
 
-### Binary Sensors
-
-| Entity | Description | On when |
-|--------|-------------|---------|
-| `binary_sensor.<child>_present` | Whether the child is at school | `present`, `fieldtrip`, `sleeping`, `spare_time_activity`, or `physical_placement` |
-
 ### Calendar
 
 | Entity | Description |
 |--------|-------------|
 | `calendar.<child>_school` | Upcoming school events including teacher, substitute, and location |
+
+---
+
+## Events
+
+### `hass_aula_notification`
+
+Fired each time a **new** notification appears on your Aula account (checked every 5 minutes). The first fetch after startup is silent — events are only fired for notifications that arrive after Home Assistant starts.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `notification_id` | `string` | Unique notification ID |
+| `title` | `string` | Notification title |
+| `module` | `string \| null` | Aula module that generated the notification (e.g. `"messaging"`) |
+| `event_type` | `string \| null` | Event type within the module |
+| `related_child_name` | `string \| null` | Name of the child this notification relates to |
+| `created_at` | `string \| null` | ISO timestamp of when the notification was created |
+| `is_read` | `bool \| null` | Whether the notification has been read |
 
 ---
 
@@ -141,6 +160,46 @@ automation:
           message: "Emma has been reported sick today"
 ```
 
+**Push a notification to your phone when a new Aula message arrives:**
+
+```yaml
+automation:
+  - alias: "Forward Aula notification to phone"
+    trigger:
+      - platform: event
+        event_type: hass_aula_notification
+    action:
+      - service: notify.mobile_app_my_phone
+        data:
+          title: "Aula: {{ trigger.event.data.title }}"
+          message: >
+            {% if trigger.event.data.related_child_name %}
+              {{ trigger.event.data.related_child_name }}: {{ trigger.event.data.title }}
+            {% else %}
+              {{ trigger.event.data.title }}
+            {% endif %}
+```
+
+**Only forward unread messages from a specific module:**
+
+```yaml
+automation:
+  - alias: "Forward unread Aula messages"
+    trigger:
+      - platform: event
+        event_type: hass_aula_notification
+        event_data:
+          module: messaging
+    condition:
+      - condition: template
+        value_template: "{{ not trigger.event.data.is_read }}"
+    action:
+      - service: notify.mobile_app_my_phone
+        data:
+          title: "New Aula message"
+          message: "{{ trigger.event.data.title }}"
+```
+
 ---
 
 ## Update Intervals
@@ -148,6 +207,7 @@ automation:
 | Data | Interval |
 |------|----------|
 | Presence & times | Every 5 minutes |
+| Notifications | Every 5 minutes |
 | School calendar | Every 60 minutes |
 
 ---

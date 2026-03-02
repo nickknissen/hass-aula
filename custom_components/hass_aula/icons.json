@@ -20,11 +20,6 @@
         "default": "mdi:map-marker"
       }
     },
-    "binary_sensor": {
-      "is_present": {
-        "default": "mdi:account-check"
-      }
-    },
     "calendar": {
       "school_calendar": {
         "default": "mdi:calendar-school"
