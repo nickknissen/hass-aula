@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import ssl
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import voluptuous as vol
 from aula import WidgetConfiguration, authenticate, create_client
 from aula.http_httpx import HttpxHttpClient
@@ -36,6 +38,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._qr_ready_task: asyncio.Task[None] | None = None
         self._qr_ready_event: asyncio.Event | None = None
         self._qr_svg: str | None = None
+        self._httpx_client: httpx.AsyncClient | None = None
         self._qr_view: AulaQRView | None = None
         self._reauth_entry: ConfigEntry | None = None
         self._available_widgets: list[WidgetConfiguration] = []
@@ -78,6 +81,16 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             self._qr_ready_task = self.hass.async_create_task(
                 self._wait_for_qr_ready(),
                 "hass_aula_qr_ready",
+            )
+            # Build the SSL context in an executor to avoid blocking the event
+            # loop with ssl.SSLContext.load_verify_locations.
+            ssl_context = await self.hass.async_add_executor_job(
+                ssl.create_default_context,
+            )
+            self._httpx_client = httpx.AsyncClient(
+                verify=ssl_context,
+                follow_redirects=False,
+                timeout=30,
             )
             # Register the view BEFORE creating the auth task.
             # The task starts eagerly, so on_qr_codes fires synchronously during
@@ -344,10 +357,14 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 LOGGER.debug("QR ready event set")
 
         LOGGER.debug("Calling aula.authenticate for %s", self._mitid_username)
-        result = await authenticate(
-            mitid_username=self._mitid_username,
-            on_qr_codes=on_qr_codes,
-        )
+        try:
+            result = await authenticate(
+                mitid_username=self._mitid_username,
+                on_qr_codes=on_qr_codes,
+                httpx_client=self._httpx_client,
+            )
+        finally:
+            await self._httpx_client.aclose()
         LOGGER.debug("aula.authenticate returned successfully")
         return result
 
