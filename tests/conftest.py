@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -44,7 +45,7 @@ def enable_custom_integrations(hass: HomeAssistant) -> None:
     hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
 
-def make_config_entry(**kwargs) -> MockConfigEntry:
+def make_config_entry(**kwargs: Any) -> MockConfigEntry:
     """Create a MockConfigEntry with default Aula test data."""
     defaults = {
         "domain": DOMAIN,

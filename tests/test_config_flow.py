@@ -18,11 +18,14 @@ from custom_components.hass_aula.const import (
 from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, make_config_entry
 
 # Patch target for widget fetching (avoids network calls in tests)
-_FETCH_WIDGETS = "custom_components.hass_aula.config_flow.AulaFlowHandler._async_fetch_widgets"
+_FETCH_WIDGETS = (
+    "custom_components.hass_aula.config_flow.AulaFlowHandler._async_fetch_widgets"
+)
 
 
-async def _advance_to_select_widgets(hass, flow_id):
-    """Drive the flow from SHOW_PROGRESS (if any) to the select_widgets FORM.
+async def _advance_to_select_widgets(hass: HomeAssistant, flow_id: str) -> None:
+    """
+    Drive the flow from SHOW_PROGRESS (if any) to the select_widgets FORM.
 
     With an eager mock, auth may complete synchronously and we go straight to
     FORM.  With a slower mock we get SHOW_PROGRESS first.  This helper handles

@@ -16,15 +16,13 @@ async def test_first_fetch_does_not_fire_events(hass: HomeAssistant) -> None:
     """First fetch populates known IDs but fires no events."""
     client = AsyncMock()
     notification = mock_notification(notification_id="1")
-    client.get_notifications_for_active_profile = AsyncMock(
-        return_value=[notification]
-    )
+    client.get_notifications_for_active_profile = AsyncMock(return_value=[notification])
 
     coordinator = AulaNotificationsCoordinator(hass, client)
     coordinator.config_entry = MagicMock()
 
     fired_events = []
-    hass.bus.async_listen(EVENT_NOTIFICATION, lambda e: fired_events.append(e))
+    hass.bus.async_listen(EVENT_NOTIFICATION, fired_events.append)
 
     await coordinator._async_update_data()
     await hass.async_block_till_done()
@@ -37,15 +35,13 @@ async def test_second_fetch_same_notifications_no_events(hass: HomeAssistant) ->
     """Second fetch with same notifications does not fire any events."""
     client = AsyncMock()
     notification = mock_notification(notification_id="1")
-    client.get_notifications_for_active_profile = AsyncMock(
-        return_value=[notification]
-    )
+    client.get_notifications_for_active_profile = AsyncMock(return_value=[notification])
 
     coordinator = AulaNotificationsCoordinator(hass, client)
     coordinator.config_entry = MagicMock()
 
     fired_events = []
-    hass.bus.async_listen(EVENT_NOTIFICATION, lambda e: fired_events.append(e))
+    hass.bus.async_listen(EVENT_NOTIFICATION, fired_events.append)
 
     # First fetch
     await coordinator._async_update_data()
@@ -61,7 +57,7 @@ async def test_second_fetch_same_notifications_no_events(hass: HomeAssistant) ->
 async def test_new_notification_fires_event_with_correct_payload(
     hass: HomeAssistant,
 ) -> None:
-    """A new notification on the second fetch fires exactly one event with correct data."""
+    """A new notification on the second fetch fires exactly one event."""
     client = AsyncMock()
     existing = mock_notification(notification_id="1", title="Old")
     new_notif = mock_notification(
@@ -80,7 +76,7 @@ async def test_new_notification_fires_event_with_correct_payload(
     coordinator.config_entry = MagicMock()
 
     fired_events = []
-    hass.bus.async_listen(EVENT_NOTIFICATION, lambda e: fired_events.append(e))
+    hass.bus.async_listen(EVENT_NOTIFICATION, fired_events.append)
 
     await coordinator._async_update_data()
     await hass.async_block_till_done()
@@ -117,7 +113,7 @@ async def test_multiple_new_notifications_fire_separate_events(
     coordinator.config_entry = MagicMock()
 
     fired_events = []
-    hass.bus.async_listen(EVENT_NOTIFICATION, lambda e: fired_events.append(e))
+    hass.bus.async_listen(EVENT_NOTIFICATION, fired_events.append)
 
     await coordinator._async_update_data()
     await hass.async_block_till_done()
