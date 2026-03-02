@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "--- lint ---"
+ruff format --check .
+ruff check .
+
+echo "--- tests ---"
+.venv/bin/pytest
