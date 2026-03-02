@@ -65,6 +65,24 @@
           "physical_placement": "Fysisk placering",
           "checked_out": "Gået"
         }
+      },
+      "library_loans": {
+        "name": "Bibliotekslån"
+      },
+      "mu_tasks": {
+        "name": "Opgaver"
+      },
+      "easyiq_weekplan": {
+        "name": "Ugeplan"
+      },
+      "easyiq_homework": {
+        "name": "Lektier"
+      },
+      "meebook_weekplan": {
+        "name": "Meebook ugeplan"
+      },
+      "huskelisten_reminders": {
+        "name": "Påmindelser"
       }
     },
     "calendar": {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from aula import (
@@ -16,18 +17,61 @@ from aula.http_httpx import HttpxHttpClient
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_TOKEN_DATA, CONF_WIDGETS, DOMAIN, LOGGER, PLATFORMS
+from .const import (
+    CONF_TOKEN_DATA,
+    CONF_WIDGETS,
+    DOMAIN,
+    LOGGER,
+    PLATFORMS,
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_HUSKELISTEN,
+    WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE,
+)
 from .coordinator import (
     AulaCalendarCoordinator,
+    AulaEasyIQCoordinator,
+    AulaHuskelistenCoordinator,
+    AulaLibraryCoordinator,
+    AulaMeebookCoordinator,
+    AulaMUTasksCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
+    _get_child_institution_code,
+    _get_child_widget_id,
 )
-from .data import AulaRuntimeData
+from .data import AulaRuntimeData, WidgetContext
 
 if TYPE_CHECKING:
+    from aula import AulaApiClient, Profile
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
+
+# All widget IDs that require building a widget context.
+_ALL_WIDGET_IDS = (
+    WIDGET_BIBLIOTEKET,
+    WIDGET_MIN_UDDANNELSE,
+    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_MEEBOOK,
+    WIDGET_HUSKELISTEN,
+)
+
+
+@dataclass
+class _WidgetCoordinators:
+    """Container for optional widget coordinators."""
+
+    library: AulaLibraryCoordinator | None = None
+    mu_tasks: AulaMUTasksCoordinator | None = None
+    easyiq: AulaEasyIQCoordinator | None = None
+    meebook: AulaMeebookCoordinator | None = None
+    huskelisten: AulaHuskelistenCoordinator | None = None
 
 
 def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
@@ -38,6 +82,84 @@ def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
     """Create HTTP client in a thread to avoid blocking SSL cert loading."""
     return HttpxHttpClient(cookies=cookies)
+
+
+async def _build_widget_context(
+    client: AulaApiClient, profile: Profile
+) -> WidgetContext:
+    """Build the widget context from profile data."""
+    profile_context = await client.get_profile_context()
+    session_uuid = str(profile_context["data"]["userId"])
+
+    child_filter: list[str] = []
+    institution_codes: set[str] = set()
+
+    for child in profile.children:
+        child_filter.append(_get_child_widget_id(child))
+        inst_code = _get_child_institution_code(child)
+        if inst_code:
+            institution_codes.add(inst_code)
+
+    return WidgetContext(
+        child_filter=child_filter,
+        institution_filter=sorted(institution_codes),
+        session_uuid=session_uuid,
+    )
+
+
+async def _try_build_widget_context(
+    entry: AulaConfigEntry,
+    client: AulaApiClient,
+    profile: Profile,
+) -> WidgetContext | None:
+    """Build widget context if any widget is enabled, else return None."""
+    if not any(is_widget_enabled(entry, w) for w in _ALL_WIDGET_IDS):
+        return None
+
+    try:
+        return await _build_widget_context(client, profile)
+    except (
+        AulaAuthenticationError,
+        AulaConnectionError,
+        AulaServerError,
+        AulaRateLimitError,
+    ) as err:
+        LOGGER.warning("Failed to build widget context, skipping widgets: %s", err)
+        return None
+
+
+def _create_widget_coordinators(
+    hass: HomeAssistant,
+    entry: AulaConfigEntry,
+    client: AulaApiClient,
+    profile: Profile,
+    widget_context: WidgetContext,
+) -> _WidgetCoordinators:
+    """Create widget coordinators for enabled widgets."""
+    wc = _WidgetCoordinators()
+
+    if is_widget_enabled(entry, WIDGET_BIBLIOTEKET):
+        wc.library = AulaLibraryCoordinator(hass, client, profile, widget_context)
+
+    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE):
+        wc.mu_tasks = AulaMUTasksCoordinator(hass, client, profile, widget_context)
+
+    if (
+        is_widget_enabled(entry, WIDGET_EASYIQ)
+        or is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN)
+        or is_widget_enabled(entry, WIDGET_EASYIQ_HOMEWORK)
+    ):
+        wc.easyiq = AulaEasyIQCoordinator(hass, client, profile, widget_context)
+
+    if is_widget_enabled(entry, WIDGET_MEEBOOK):
+        wc.meebook = AulaMeebookCoordinator(hass, client, profile, widget_context)
+
+    if is_widget_enabled(entry, WIDGET_HUSKELISTEN):
+        wc.huskelisten = AulaHuskelistenCoordinator(
+            hass, client, profile, widget_context
+        )
+
+    return wc
 
 
 async def async_setup_entry(
@@ -83,11 +205,25 @@ async def async_setup_entry(
     calendar_coordinator = AulaCalendarCoordinator(hass, client, profile)
     notifications_coordinator = AulaNotificationsCoordinator(hass, client)
 
-    await asyncio.gather(
+    # Create widget coordinators if any widgets are enabled
+    wc = _WidgetCoordinators()
+    widget_context = await _try_build_widget_context(entry, client, profile)
+    if widget_context:
+        wc = _create_widget_coordinators(hass, entry, client, profile, widget_context)
+
+    # First refresh all coordinators in parallel
+    first_refreshes = [
         presence_coordinator.async_config_entry_first_refresh(),
         calendar_coordinator.async_config_entry_first_refresh(),
         notifications_coordinator.async_config_entry_first_refresh(),
+    ]
+    first_refreshes.extend(
+        coord.async_config_entry_first_refresh()
+        for coord in (wc.library, wc.mu_tasks, wc.easyiq, wc.meebook, wc.huskelisten)
+        if coord
     )
+
+    await asyncio.gather(*first_refreshes)
 
     entry.runtime_data = AulaRuntimeData(
         client=client,
@@ -95,6 +231,11 @@ async def async_setup_entry(
         presence_coordinator=presence_coordinator,
         calendar_coordinator=calendar_coordinator,
         notifications_coordinator=notifications_coordinator,
+        library_coordinator=wc.library,
+        mu_tasks_coordinator=wc.mu_tasks,
+        easyiq_coordinator=wc.easyiq,
+        meebook_coordinator=wc.meebook,
+        huskelisten_coordinator=wc.huskelisten,
     )
 
     _async_remove_stale_devices(hass, entry)

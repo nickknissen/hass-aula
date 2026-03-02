@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -14,24 +15,67 @@ from aula import (
     CalendarEvent,
     DailyOverview,
 )
-from aula.models import Notification
+from aula.models import MUTask, Notification
+from aula.models.meebook_weekplan import MeebookTask
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CALENDAR_POLL_INTERVAL,
+    EASYIQ_POLL_INTERVAL,
     EVENT_NOTIFICATION,
+    HUSKELISTEN_POLL_INTERVAL,
+    LIBRARY_POLL_INTERVAL,
     LOGGER,
+    MEEBOOK_POLL_INTERVAL,
+    MU_TASKS_POLL_INTERVAL,
     NOTIFICATIONS_POLL_INTERVAL,
     PRESENCE_POLL_INTERVAL,
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_MIN_UDDANNELSE,
 )
+from .data import EasyIQChildData, HuskelistenChildData, LibraryChildData, WidgetContext
 
 if TYPE_CHECKING:
-    from aula import AulaApiClient, Profile
+    from collections.abc import AsyncIterator
+
+    from aula import AulaApiClient, Child, Profile
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
+
+
+@asynccontextmanager
+async def _aula_api_errors() -> AsyncIterator[None]:
+    """Translate Aula API errors to Home Assistant exceptions."""
+    try:
+        yield
+    except AulaAuthenticationError as err:
+        raise ConfigEntryAuthFailed(
+            translation_domain="hass_aula",
+            translation_key="auth_failed",
+        ) from err
+    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+        msg = f"Error communicating with Aula API: {err}"
+        raise UpdateFailed(msg) from err
+
+
+def _get_child_widget_id(child: Child) -> str:
+    """Get the widget user ID for a child from its raw data."""
+    raw = child._raw  # noqa: SLF001
+    if raw:
+        return str(raw["userId"])
+    return str(child.id)
+
+
+def _get_child_institution_code(child: Child) -> str:
+    """Get the institution code for a child from its raw data."""
+    raw = child._raw  # noqa: SLF001
+    if raw:
+        return raw.get("institutionProfile", {}).get("institutionCode", "")
+    return ""
 
 
 class AulaPresenceCoordinator(
@@ -59,27 +103,17 @@ class AulaPresenceCoordinator(
 
     async def _async_update_data(self) -> dict[int, DailyOverview | None]:
         """Fetch presence data for all children."""
-        try:
+        async with _aula_api_errors():
             results = await asyncio.gather(
                 *(
                     self.client.get_daily_overview(child.id)
                     for child in self.profile.children
                 )
             )
-            data: dict[int, DailyOverview | None] = {
+            return {
                 child.id: result
                 for child, result in zip(self.profile.children, results, strict=False)
             }
-        except AulaAuthenticationError as err:
-            raise ConfigEntryAuthFailed(
-                translation_domain="hass_aula",
-                translation_key="auth_failed",
-            ) from err
-        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
-            msg = f"Error communicating with Aula API: {err}"
-            raise UpdateFailed(msg) from err
-        else:
-            return data
 
 
 class AulaCalendarCoordinator(
@@ -107,7 +141,7 @@ class AulaCalendarCoordinator(
 
     async def _async_update_data(self) -> dict[int, list[CalendarEvent]]:
         """Fetch calendar events for all children."""
-        try:
+        async with _aula_api_errors():
             now = dt_util.now()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=30)
@@ -125,15 +159,6 @@ class AulaCalendarCoordinator(
             for event in events:
                 if event.belongs_to in result:
                     result[event.belongs_to].append(event)
-        except AulaAuthenticationError as err:
-            raise ConfigEntryAuthFailed(
-                translation_domain="hass_aula",
-                translation_key="auth_failed",
-            ) from err
-        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
-            msg = f"Error communicating with Aula API: {err}"
-            raise UpdateFailed(msg) from err
-        else:
             return result
 
 
@@ -161,18 +186,10 @@ class AulaNotificationsCoordinator(
 
     async def _async_update_data(self) -> list[Notification]:
         """Fetch notifications for the active profile."""
-        try:
+        async with _aula_api_errors():
             notifications = await self.client.get_notifications_for_active_profile(
                 limit=50
             )
-        except AulaAuthenticationError as err:
-            raise ConfigEntryAuthFailed(
-                translation_domain="hass_aula",
-                translation_key="auth_failed",
-            ) from err
-        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
-            msg = f"Error communicating with Aula API: {err}"
-            raise UpdateFailed(msg) from err
 
         new_ids = {n.id for n in notifications}
         if self._known_ids is None:
@@ -196,3 +213,305 @@ class AulaNotificationsCoordinator(
             self._known_ids = new_ids
 
         return notifications
+
+
+class _AulaWidgetCoordinator(DataUpdateCoordinator):
+    """Shared base for all widget coordinators."""
+
+    config_entry: AulaConfigEntry
+
+    def __init__(  # noqa: PLR0913
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+        *,
+        name: str,
+        update_interval: timedelta,
+    ) -> None:
+        """Initialize the widget coordinator."""
+        super().__init__(
+            hass,
+            logger=LOGGER,
+            name=name,
+            update_interval=update_interval,
+        )
+        self.client = client
+        self.profile = profile
+        self.widget_context = widget_context
+        # Pre-build name lookup for child matching
+        self._child_by_name: dict[str, Child] = {
+            child.name: child for child in profile.children
+        }
+
+    def _match_child(self, name: str) -> Child | None:
+        """Match a name string to a child, with partial-match fallback."""
+        child = self._child_by_name.get(name)
+        if child:
+            return child
+        # Fallback: partial match
+        for child_name, child in self._child_by_name.items():
+            if child_name in name or name in child_name:
+                return child
+        return None
+
+
+class AulaLibraryCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, LibraryChildData]],
+):
+    """Coordinator for fetching library loan data."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+    ) -> None:
+        """Initialize the library coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            name="Aula Library",
+            update_interval=timedelta(seconds=LIBRARY_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, LibraryChildData]:
+        """Fetch library status and distribute to children."""
+        async with _aula_api_errors():
+            status = await self.client.widgets.get_library_status(
+                widget_id=WIDGET_BIBLIOTEKET,
+                children=self.widget_context.child_filter,
+                institutions=self.widget_context.institution_filter,
+                session_uuid=self.widget_context.session_uuid,
+            )
+
+        result: dict[int, LibraryChildData] = {
+            child.id: LibraryChildData() for child in self.profile.children
+        }
+
+        for loan in status.loans:
+            child = self._match_child(loan.patron_display_name)
+            if child and child.id in result:
+                result[child.id].loans.append(loan)
+
+        for loan in status.longterm_loans:
+            child = self._match_child(loan.patron_display_name)
+            if child and child.id in result:
+                result[child.id].longterm_loans.append(loan)
+
+        # Reservations don't have patron info, assign to all children
+        for child_data in result.values():
+            child_data.reservations = status.reservations
+
+        return result
+
+
+class AulaMUTasksCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, list[MUTask]]],
+):
+    """Coordinator for fetching Min Uddannelse tasks."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+    ) -> None:
+        """Initialize the MU tasks coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            name="Aula MU Tasks",
+            update_interval=timedelta(seconds=MU_TASKS_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, list[MUTask]]:
+        """Fetch MU tasks and distribute to children."""
+        week = dt_util.now().strftime("%G-W%V")
+        async with _aula_api_errors():
+            tasks = await self.client.widgets.get_mu_tasks(
+                widget_id=WIDGET_MIN_UDDANNELSE,
+                child_filter=self.widget_context.child_filter,
+                institution_filter=self.widget_context.institution_filter,
+                week=week,
+                session_uuid=self.widget_context.session_uuid,
+            )
+
+        result: dict[int, list[MUTask]] = {
+            child.id: [] for child in self.profile.children
+        }
+
+        for task in tasks:
+            child = self._match_child(task.student_name)
+            if child and child.id in result:
+                result[child.id].append(task)
+
+        return result
+
+
+class AulaEasyIQCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, EasyIQChildData]],
+):
+    """Coordinator for fetching EasyIQ weekplan and homework."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+    ) -> None:
+        """Initialize the EasyIQ coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            name="Aula EasyIQ",
+            update_interval=timedelta(seconds=EASYIQ_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, EasyIQChildData]:
+        """Fetch EasyIQ weekplan and homework per child."""
+        week = dt_util.now().strftime("%G-W%V")
+
+        async def _fetch_child(child: Child) -> tuple[int, EasyIQChildData]:
+            child_id_str = _get_child_widget_id(child)
+            inst_code = _get_child_institution_code(child)
+            if not inst_code and self.widget_context.institution_filter:
+                inst_code = self.widget_context.institution_filter[0]
+            inst_filter = [inst_code]
+
+            weekplan, homework = await asyncio.gather(
+                self.client.widgets.get_easyiq_weekplan(
+                    week=week,
+                    session_uuid=self.widget_context.session_uuid,
+                    institution_filter=inst_filter,
+                    child_id=child_id_str,
+                    widget_id=WIDGET_EASYIQ_WEEKPLAN,
+                ),
+                self.client.widgets.get_easyiq_homework(
+                    week=week,
+                    session_uuid=self.widget_context.session_uuid,
+                    institution_filter=inst_filter,
+                    child_id=child_id_str,
+                ),
+            )
+            return child.id, EasyIQChildData(weekplan=weekplan, homework=homework)
+
+        async with _aula_api_errors():
+            results = await asyncio.gather(
+                *(_fetch_child(child) for child in self.profile.children)
+            )
+
+        return dict(results)
+
+
+class AulaMeebookCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, list[MeebookTask]]],
+):
+    """Coordinator for fetching Meebook weekplan data."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+    ) -> None:
+        """Initialize the Meebook coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            name="Aula Meebook",
+            update_interval=timedelta(seconds=MEEBOOK_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, list[MeebookTask]]:
+        """Fetch Meebook weekplan and distribute tasks to children."""
+        week = dt_util.now().strftime("%G-W%V")
+        async with _aula_api_errors():
+            student_plans = await self.client.widgets.get_meebook_weekplan(
+                child_filter=self.widget_context.child_filter,
+                institution_filter=self.widget_context.institution_filter,
+                week=week,
+                session_uuid=self.widget_context.session_uuid,
+            )
+
+        result: dict[int, list[MeebookTask]] = {
+            child.id: [] for child in self.profile.children
+        }
+
+        for plan in student_plans:
+            child = self._match_child(plan.name)
+            if child and child.id in result:
+                for day_plan in plan.week_plan:
+                    result[child.id].extend(day_plan.tasks)
+
+        return result
+
+
+class AulaHuskelistenCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, HuskelistenChildData]],
+):
+    """Coordinator for fetching Huskelisten reminders."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+    ) -> None:
+        """Initialize the Huskelisten coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            name="Aula Huskelisten",
+            update_interval=timedelta(seconds=HUSKELISTEN_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, HuskelistenChildData]:
+        """Fetch Huskelisten reminders and distribute to children."""
+        now = dt_util.now()
+        from_date = now.strftime("%Y-%m-%d")
+        due_no_later_than = (now + timedelta(days=30)).strftime("%Y-%m-%d")
+
+        async with _aula_api_errors():
+            user_reminders_list = await self.client.widgets.get_momo_reminders(
+                children=self.widget_context.child_filter,
+                institutions=self.widget_context.institution_filter,
+                session_uuid=self.widget_context.session_uuid,
+                from_date=from_date,
+                due_no_later_than=due_no_later_than,
+            )
+
+        result: dict[int, HuskelistenChildData] = {
+            child.id: HuskelistenChildData() for child in self.profile.children
+        }
+
+        for user_reminders in user_reminders_list:
+            child = self._match_child(user_reminders.user_name)
+            if child and child.id in result:
+                result[child.id].team_reminders.extend(user_reminders.team_reminders)
+                result[child.id].assignment_reminders.extend(
+                    user_reminders.assignment_reminders
+                )
+
+        return result

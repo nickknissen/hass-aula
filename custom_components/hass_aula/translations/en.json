@@ -65,6 +65,24 @@
           "physical_placement": "Physical placement",
           "checked_out": "Checked out"
         }
+      },
+      "library_loans": {
+        "name": "Library loans"
+      },
+      "mu_tasks": {
+        "name": "Tasks"
+      },
+      "easyiq_weekplan": {
+        "name": "Weekplan"
+      },
+      "easyiq_homework": {
+        "name": "Homework"
+      },
+      "meebook_weekplan": {
+        "name": "Meebook weekplan"
+      },
+      "huskelisten_reminders": {
+        "name": "Reminders"
       }
     },
     "calendar": {

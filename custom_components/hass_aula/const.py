@@ -4,6 +4,27 @@ from __future__ import annotations
 
 from logging import Logger, getLogger
 
+from aula.const import (
+    WIDGET_BIBLIOTEKET as WIDGET_BIBLIOTEKET,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_EASYIQ as WIDGET_EASYIQ,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_EASYIQ_HOMEWORK as WIDGET_EASYIQ_HOMEWORK,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_EASYIQ_WEEKPLAN as WIDGET_EASYIQ_WEEKPLAN,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_HUSKELISTEN as WIDGET_HUSKELISTEN,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_MEEBOOK as WIDGET_MEEBOOK,  # noqa: PLC0414
+)
+from aula.const import (
+    WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE,  # noqa: PLC0414
+)
 from homeassistant.const import Platform
 
 LOGGER: Logger = getLogger(__package__)
@@ -20,11 +41,12 @@ PRESENCE_POLL_INTERVAL = 300  # 5 minutes
 NOTIFICATIONS_POLL_INTERVAL = 300  # 5 minutes
 CALENDAR_POLL_INTERVAL = 3600  # 60 minutes
 
-# Widget IDs from aula.const
-WIDGET_BIBLIOTEKET = "0019"
-WIDGET_MIN_UDDANNELSE = "0030"
-WIDGET_EASYIQ = "0001"
-WIDGET_HUSKELISTEN = "0062"
+# Widget poll intervals (seconds)
+LIBRARY_POLL_INTERVAL = 3600  # 60 minutes
+MU_TASKS_POLL_INTERVAL = 1800  # 30 minutes
+EASYIQ_POLL_INTERVAL = 1800  # 30 minutes
+MEEBOOK_POLL_INTERVAL = 3600  # 60 minutes
+HUSKELISTEN_POLL_INTERVAL = 1800  # 30 minutes
 
 PARALLEL_UPDATES = 1
 

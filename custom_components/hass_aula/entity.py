@@ -10,6 +10,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import (
     AulaCalendarCoordinator,
+    AulaEasyIQCoordinator,
+    AulaHuskelistenCoordinator,
+    AulaLibraryCoordinator,
+    AulaMeebookCoordinator,
+    AulaMUTasksCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
 )
@@ -17,9 +22,19 @@ from .coordinator import (
 if TYPE_CHECKING:
     from aula import Child, Profile
 
+type AulaChildCoordinator = (
+    AulaPresenceCoordinator
+    | AulaCalendarCoordinator
+    | AulaLibraryCoordinator
+    | AulaMUTasksCoordinator
+    | AulaEasyIQCoordinator
+    | AulaMeebookCoordinator
+    | AulaHuskelistenCoordinator
+)
+
 
 class AulaEntity(
-    CoordinatorEntity[AulaPresenceCoordinator | AulaCalendarCoordinator],
+    CoordinatorEntity[AulaChildCoordinator],
 ):
     """Base class for Aula entities."""
 
@@ -27,7 +42,7 @@ class AulaEntity(
 
     def __init__(
         self,
-        coordinator: AulaPresenceCoordinator | AulaCalendarCoordinator,
+        coordinator: AulaChildCoordinator,
         child: Child,
     ) -> None:
         """Initialize the entity."""

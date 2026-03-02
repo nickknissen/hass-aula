@@ -18,6 +18,24 @@
       },
       "location": {
         "default": "mdi:map-marker"
+      },
+      "library_loans": {
+        "default": "mdi:book-open-variant"
+      },
+      "mu_tasks": {
+        "default": "mdi:clipboard-check-outline"
+      },
+      "easyiq_weekplan": {
+        "default": "mdi:calendar-week"
+      },
+      "easyiq_homework": {
+        "default": "mdi:book-education"
+      },
+      "meebook_weekplan": {
+        "default": "mdi:notebook-outline"
+      },
+      "huskelisten_reminders": {
+        "default": "mdi:bell-ring-outline"
       }
     },
     "calendar": {
