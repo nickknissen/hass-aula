@@ -175,6 +175,33 @@ async def test_all_presence_states(
         await hass.async_block_till_done()
 
 
+# --- Notification Sensor Tests ---
+
+
+async def test_unread_notifications_counts_none_as_unread(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test that notifications with is_read=None are counted as unread."""
+    from .conftest import mock_notification
+
+    n_none = mock_notification(notification_id="1", is_read=None)
+    n_false = mock_notification(notification_id="2", is_read=False)
+    n_true = mock_notification(notification_id="3", is_read=True)
+    mock_aula_client.get_notifications_for_active_profile = AsyncMock(
+        return_value=[n_none, n_false, n_true]
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_unread_notifications")
+    assert state is not None
+    assert state.state == "2"
+
+
 # --- Library Sensor Tests ---
 
 

@@ -188,15 +188,23 @@ class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
     def native_value(self) -> int:
         """Return the number of unread notifications."""
         notifications = self.coordinator.data or []
-        return sum(1 for n in notifications if n.is_read is False)
+        return sum(1 for n in notifications if not n.is_read)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return total count and recent notification titles."""
         notifications = self.coordinator.data or []
         return {
-            "total": len(notifications),
-            "recent": [n.title for n in notifications[:5]],
+            "recent": [
+                {
+                    "title": n.title,
+                    "module": n.module,
+                    "event_type": n.event_type,
+                    "related_child_name": n.related_child_name,
+                    "created_at": n.created_at,
+                }
+                for n in notifications[:5]
+            ],
         }
 
 
