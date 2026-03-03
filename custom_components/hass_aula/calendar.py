@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from aula import (
@@ -13,11 +12,14 @@ from aula import (
 )
 from aula import CalendarEvent as AulaCalendarEvent
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.util import dt as dt_util
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from aula import Child
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -80,7 +82,7 @@ class AulaCalendarEntity(AulaEntity, CalendarEntity):
         events = self.coordinator.data.get(self._child.id, [])
         if not events:
             return None
-        now = datetime.now().astimezone()
+        now = dt_util.now()
         upcoming = [e for e in events if e.end_datetime > now]
         if not upcoming:
             return None

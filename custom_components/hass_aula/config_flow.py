@@ -42,7 +42,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._qr_svg: str | None = None
         self._httpx_client: httpx.AsyncClient | None = None
         self._qr_view: AulaQRView | None = None
-        self._reauth_entry: ConfigEntry | None = None
+        self._existing_entry: ConfigEntry | None = None
         self._is_reconfigure: bool = False
         self._available_widgets: list[WidgetConfiguration] = []
 
@@ -217,16 +217,18 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_TOKEN_DATA: self._token_data,
                 CONF_WIDGETS: user_input.get(CONF_WIDGETS, []),
             }
-            if self._reauth_entry:
-                return self.async_update_reload_and_abort(self._reauth_entry, data=data)
+            if self._existing_entry:
+                return self.async_update_reload_and_abort(
+                    self._existing_entry, data=data
+                )
             return self.async_create_entry(
                 title=self._mitid_username,
                 data=data,
             )
 
         default_widgets = (
-            list(self._reauth_entry.data.get(CONF_WIDGETS, []))
-            if self._reauth_entry
+            list(self._existing_entry.data.get(CONF_WIDGETS, []))
+            if self._existing_entry
             else []
         )
         options = [
@@ -254,9 +256,10 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         entry_data: dict[str, Any],
     ) -> ConfigFlowResult:
         """Handle reauth when token expires."""
-        self._reauth_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        if entry is None:
+            return self.async_abort(reason="unknown")
+        self._existing_entry = entry
         self._mitid_username = entry_data[CONF_MITID_USERNAME]
         return await self.async_step_reauth_confirm()
 
@@ -285,7 +288,9 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         reconfigure_entry = self.hass.config_entries.async_get_entry(
             self.context["entry_id"]
         )
-        self._reauth_entry = reconfigure_entry
+        if reconfigure_entry is None:
+            return self.async_abort(reason="unknown")
+        self._existing_entry = reconfigure_entry
         self._is_reconfigure = True
 
         if user_input is not None:
@@ -333,13 +338,13 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def _async_auth_complete(self) -> ConfigFlowResult:
         """Route to widget selection or skip for reauth."""
-        if self._reauth_entry and not self._is_reconfigure:
+        if self._existing_entry and not self._is_reconfigure:
             return self.async_update_reload_and_abort(
-                self._reauth_entry,
+                self._existing_entry,
                 data={
                     CONF_MITID_USERNAME: self._mitid_username,
                     CONF_TOKEN_DATA: self._token_data,
-                    CONF_WIDGETS: self._reauth_entry.data.get(CONF_WIDGETS, []),
+                    CONF_WIDGETS: self._existing_entry.data.get(CONF_WIDGETS, []),
                 },
             )
         return await self.async_step_select_widgets()

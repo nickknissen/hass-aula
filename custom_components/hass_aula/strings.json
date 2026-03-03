@@ -5,6 +5,9 @@
         "description": "Enter your MitID username to begin authentication.",
         "data": {
           "mitid_username": "MitID username"
+        },
+        "data_description": {
+          "mitid_username": "The username you use to log in with MitID."
         }
       },
       "mitid_auth": {
@@ -20,6 +23,9 @@
         "description": "Select which widget data providers to pull data from.",
         "data": {
           "widgets": "Data providers"
+        },
+        "data_description": {
+          "widgets": "Aula widgets that provide additional data such as library loans, weekplans, and homework."
         }
       },
       "reauth_confirm": {
@@ -30,6 +36,9 @@
         "description": "Token refresh failed. Enter your MitID username to re-authenticate.",
         "data": {
           "mitid_username": "MitID username"
+        },
+        "data_description": {
+          "mitid_username": "The username you use to log in with MitID."
         }
       }
     },

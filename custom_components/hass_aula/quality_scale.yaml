@@ -11,7 +11,7 @@ rules:
     comment: Presence polls every 5 min, calendar every 60 min.
   brands:
     status: done
-    comment: Logo and icon provided.
+    comment: Logo and icon provided in brand/ directory.
   common-modules:
     status: done
     comment: Uses coordinator pattern, base entity, data module.
@@ -23,7 +23,7 @@ rules:
     comment: All flow paths tested.
   dependency-transparency:
     status: done
-    comment: Uses aula==0.2.0 from PyPI.
+    comment: Uses aula==0.6.1 from PyPI.
   docs-actions:
     status: exempt
     comment: No custom actions/services.

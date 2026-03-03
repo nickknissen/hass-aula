@@ -75,6 +75,8 @@ async def _aula_api_errors(
 
 def _get_child_widget_id(child: Child) -> str:
     """Get the widget user ID for a child from its raw data."""
+    # TODO(aula-package): Child does not expose userId as a public field.  # noqa: TD003, FIX002, E501
+    # Add Child.user_id to the aula package, then replace this _raw access.
     raw = child._raw  # noqa: SLF001
     if raw:
         return str(raw["userId"])
@@ -83,6 +85,8 @@ def _get_child_widget_id(child: Child) -> str:
 
 def _get_child_institution_code(child: Child) -> str:
     """Get the institution code for a child from its raw data."""
+    # TODO(aula-package): Child does not expose institutionCode as a public field.  # noqa: TD003, FIX002, E501
+    # Add Child.institution_code to the aula package, then replace this _raw access.
     raw = child._raw  # noqa: SLF001
     if raw:
         return raw.get("institutionProfile", {}).get("institutionCode", "")

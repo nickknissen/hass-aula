@@ -1,19 +1,19 @@
-name: Lint
+name: Test
 
 on:
   push:
     branches:
-      - "main"
+      - main
   pull_request:
     branches:
-      - "main"
+      - main
 
 permissions: {}
 
 jobs:
-  ruff:
-    name: "Ruff"
-    runs-on: "ubuntu-latest"
+  pytest:
+    name: Tests
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -27,11 +27,5 @@ jobs:
       - name: Install requirements
         run: python3 -m pip install -r requirements.txt
 
-      - name: Lint
-        run: python3 -m ruff check .
-
-      - name: Format
-        run: python3 -m ruff format . --check
-
-      - name: Check translations
-        run: python3 scripts/check_translations
+      - name: Run tests
+        run: python3 -m pytest tests/ --cov=custom_components/hass_aula

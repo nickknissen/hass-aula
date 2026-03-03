@@ -4,20 +4,8 @@
       "presence_status": {
         "default": "mdi:account-clock"
       },
-      "check_in_time": {
-        "default": "mdi:clock-in"
-      },
-      "check_out_time": {
-        "default": "mdi:clock-out"
-      },
-      "entry_time": {
-        "default": "mdi:clock-start"
-      },
-      "exit_time": {
-        "default": "mdi:clock-end"
-      },
-      "location": {
-        "default": "mdi:map-marker"
+      "unread_notifications": {
+        "default": "mdi:bell-badge"
       },
       "library_loans": {
         "default": "mdi:book-open-variant"

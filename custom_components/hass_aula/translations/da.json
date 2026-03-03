@@ -5,6 +5,9 @@
         "description": "Indtast dit MitID brugernavn for at starte godkendelse.",
         "data": {
           "mitid_username": "MitID brugernavn"
+        },
+        "data_description": {
+          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID."
         }
       },
       "mitid_auth": {
@@ -20,6 +23,9 @@
         "description": "Vælg hvilke widget-dataudbydere der skal hentes data fra.",
         "data": {
           "widgets": "Dataudbydere"
+        },
+        "data_description": {
+          "widgets": "Aula-widgets der leverer yderligere data som bibliotekslån, ugeplaner og lektier."
         }
       },
       "reauth_confirm": {
@@ -30,6 +36,9 @@
         "description": "Opdater dit MitID brugernavn og godkend igen.",
         "data": {
           "mitid_username": "MitID brugernavn"
+        },
+        "data_description": {
+          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID."
         }
       }
     },
@@ -44,7 +53,8 @@
     "abort": {
       "already_configured": "Denne MitID-konto er allerede konfigureret.",
       "auth_failed": "MitID-godkendelse mislykkedes.",
-      "reauth_successful": "Godkendelse gennemført."
+      "reauth_successful": "Godkendelse gennemført.",
+      "reconfigure_successful": "Konfiguration opdateret."
     }
   },
   "entity": {
