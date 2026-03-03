@@ -44,6 +44,7 @@ from .coordinator import (
     _get_child_widget_id,
 )
 from .data import AulaRuntimeData, WidgetContext
+from .token_manager import AulaTokenManager
 
 if TYPE_CHECKING:
     from aula import AulaApiClient, Profile
@@ -128,35 +129,44 @@ async def _try_build_widget_context(
         return None
 
 
-def _create_widget_coordinators(
+def _create_widget_coordinators(  # noqa: PLR0913
     hass: HomeAssistant,
     entry: AulaConfigEntry,
     client: AulaApiClient,
     profile: Profile,
     widget_context: WidgetContext,
+    token_manager: AulaTokenManager,
 ) -> _WidgetCoordinators:
     """Create widget coordinators for enabled widgets."""
     wc = _WidgetCoordinators()
 
     if is_widget_enabled(entry, WIDGET_BIBLIOTEKET):
-        wc.library = AulaLibraryCoordinator(hass, client, profile, widget_context)
+        wc.library = AulaLibraryCoordinator(
+            hass, client, profile, widget_context, token_manager
+        )
 
     if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE):
-        wc.mu_tasks = AulaMUTasksCoordinator(hass, client, profile, widget_context)
+        wc.mu_tasks = AulaMUTasksCoordinator(
+            hass, client, profile, widget_context, token_manager
+        )
 
     if (
         is_widget_enabled(entry, WIDGET_EASYIQ)
         or is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN)
         or is_widget_enabled(entry, WIDGET_EASYIQ_HOMEWORK)
     ):
-        wc.easyiq = AulaEasyIQCoordinator(hass, client, profile, widget_context)
+        wc.easyiq = AulaEasyIQCoordinator(
+            hass, client, profile, widget_context, token_manager
+        )
 
     if is_widget_enabled(entry, WIDGET_MEEBOOK):
-        wc.meebook = AulaMeebookCoordinator(hass, client, profile, widget_context)
+        wc.meebook = AulaMeebookCoordinator(
+            hass, client, profile, widget_context, token_manager
+        )
 
     if is_widget_enabled(entry, WIDGET_HUSKELISTEN):
         wc.huskelisten = AulaHuskelistenCoordinator(
-            hass, client, profile, widget_context
+            hass, client, profile, widget_context, token_manager
         )
 
     return wc
@@ -167,18 +177,22 @@ async def async_setup_entry(
     entry: AulaConfigEntry,
 ) -> bool:
     """Set up Aula from a config entry."""
+    token_manager = AulaTokenManager(hass, entry)
     token_data = entry.data[CONF_TOKEN_DATA]
     cookies = token_data.get("cookies", {})
 
     http_client = await hass.async_add_executor_job(_create_http_client, cookies)
     try:
         client = await create_client(token_data, http_client=http_client)
-    except AulaAuthenticationError as err:
+    except AulaAuthenticationError:
         await http_client.close()
-        raise ConfigEntryAuthFailed(
-            translation_domain=DOMAIN,
-            translation_key="auth_failed",
-        ) from err
+        try:
+            client, _new_token_data = await token_manager.async_refresh_token()
+        except AulaAuthenticationError as refresh_err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+            ) from refresh_err
     except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
         await http_client.close()
         raise ConfigEntryNotReady(
@@ -188,12 +202,22 @@ async def async_setup_entry(
 
     try:
         profile = await client.get_profile()
-    except AulaAuthenticationError as err:
+    except AulaAuthenticationError:
         await client.close()
-        raise ConfigEntryAuthFailed(
-            translation_domain=DOMAIN,
-            translation_key="auth_failed",
-        ) from err
+        try:
+            client, _new_token_data = await token_manager.async_refresh_token()
+            profile = await client.get_profile()
+        except AulaAuthenticationError as refresh_err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+            ) from refresh_err
+        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+            await client.close()
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="connection_failed",
+            ) from err
     except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
         await client.close()
         raise ConfigEntryNotReady(
@@ -201,15 +225,19 @@ async def async_setup_entry(
             translation_key="connection_failed",
         ) from err
 
-    presence_coordinator = AulaPresenceCoordinator(hass, client, profile)
-    calendar_coordinator = AulaCalendarCoordinator(hass, client, profile)
-    notifications_coordinator = AulaNotificationsCoordinator(hass, client)
+    presence_coordinator = AulaPresenceCoordinator(hass, client, profile, token_manager)
+    calendar_coordinator = AulaCalendarCoordinator(hass, client, profile, token_manager)
+    notifications_coordinator = AulaNotificationsCoordinator(
+        hass, client, token_manager
+    )
 
     # Create widget coordinators if any widgets are enabled
     wc = _WidgetCoordinators()
     widget_context = await _try_build_widget_context(entry, client, profile)
     if widget_context:
-        wc = _create_widget_coordinators(hass, entry, client, profile, widget_context)
+        wc = _create_widget_coordinators(
+            hass, entry, client, profile, widget_context, token_manager
+        )
 
     # First refresh all coordinators in parallel
     first_refreshes = [
@@ -227,6 +255,7 @@ async def async_setup_entry(
 
     entry.runtime_data = AulaRuntimeData(
         client=client,
+        token_manager=token_manager,
         profile=profile,
         presence_coordinator=presence_coordinator,
         calendar_coordinator=calendar_coordinator,

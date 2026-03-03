@@ -6,10 +6,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from aula import AulaApiClient, Profile
     from aula.models import Appointment, EasyIQHomework, LibraryLoan
     from aula.models.momo_huskeliste import AssignmentReminder, TeamReminder
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
     from .coordinator import (
         AulaCalendarCoordinator,
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
         AulaNotificationsCoordinator,
         AulaPresenceCoordinator,
     )
+    from .token_manager import AulaTokenManager
 
 type AulaConfigEntry = ConfigEntry[AulaRuntimeData]
 
@@ -64,6 +68,7 @@ class AulaRuntimeData:
     """Runtime data for the Aula integration."""
 
     client: AulaApiClient
+    token_manager: AulaTokenManager
     profile: Profile
     presence_coordinator: AulaPresenceCoordinator
     calendar_coordinator: AulaCalendarCoordinator
@@ -73,3 +78,19 @@ class AulaRuntimeData:
     easyiq_coordinator: AulaEasyIQCoordinator | None = None
     meebook_coordinator: AulaMeebookCoordinator | None = None
     huskelisten_coordinator: AulaHuskelistenCoordinator | None = None
+
+    @property
+    def all_coordinators(self) -> Iterator[DataUpdateCoordinator]:
+        """Yield all active coordinators."""
+        for coord in (
+            self.presence_coordinator,
+            self.calendar_coordinator,
+            self.notifications_coordinator,
+            self.library_coordinator,
+            self.mu_tasks_coordinator,
+            self.easyiq_coordinator,
+            self.meebook_coordinator,
+            self.huskelisten_coordinator,
+        ):
+            if coord is not None:
+                yield coord

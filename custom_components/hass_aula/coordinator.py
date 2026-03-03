@@ -23,6 +23,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CALENDAR_POLL_INTERVAL,
+    DOMAIN,
     EASYIQ_POLL_INTERVAL,
     EVENT_NOTIFICATION,
     HUSKELISTEN_POLL_INTERVAL,
@@ -45,16 +46,26 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
+    from .token_manager import AulaTokenManager
 
 
 @asynccontextmanager
-async def _aula_api_errors() -> AsyncIterator[None]:
+async def _aula_api_errors(
+    token_manager: AulaTokenManager | None = None,
+) -> AsyncIterator[None]:
     """Translate Aula API errors to Home Assistant exceptions."""
     try:
         yield
     except AulaAuthenticationError as err:
+        if token_manager is not None:
+            try:
+                await token_manager.async_refresh_and_rebuild_client()
+                msg = "Session refreshed, retrying"
+                raise UpdateFailed(msg) from err
+            except AulaAuthenticationError:
+                pass
         raise ConfigEntryAuthFailed(
-            translation_domain="hass_aula",
+            translation_domain=DOMAIN,
             translation_key="auth_failed",
         ) from err
     except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
@@ -90,6 +101,7 @@ class AulaPresenceCoordinator(
         hass: HomeAssistant,
         client: AulaApiClient,
         profile: Profile,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the presence coordinator."""
         super().__init__(
@@ -100,10 +112,11 @@ class AulaPresenceCoordinator(
         )
         self.client = client
         self.profile = profile
+        self.token_manager = token_manager
 
     async def _async_update_data(self) -> dict[int, DailyOverview | None]:
         """Fetch presence data for all children."""
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             results = await asyncio.gather(
                 *(
                     self.client.get_daily_overview(child.id)
@@ -128,6 +141,7 @@ class AulaCalendarCoordinator(
         hass: HomeAssistant,
         client: AulaApiClient,
         profile: Profile,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the calendar coordinator."""
         super().__init__(
@@ -138,10 +152,11 @@ class AulaCalendarCoordinator(
         )
         self.client = client
         self.profile = profile
+        self.token_manager = token_manager
 
     async def _async_update_data(self) -> dict[int, list[CalendarEvent]]:
         """Fetch calendar events for all children."""
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             now = dt_util.now()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=30)
@@ -173,6 +188,7 @@ class AulaNotificationsCoordinator(
         self,
         hass: HomeAssistant,
         client: AulaApiClient,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the notifications coordinator."""
         super().__init__(
@@ -182,11 +198,12 @@ class AulaNotificationsCoordinator(
             update_interval=timedelta(seconds=NOTIFICATIONS_POLL_INTERVAL),
         )
         self.client = client
+        self.token_manager = token_manager
         self._known_ids: set[str] | None = None
 
     async def _async_update_data(self) -> list[Notification]:
         """Fetch notifications for the active profile."""
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             notifications = await self.client.get_notifications_for_active_profile(
                 limit=50
             )
@@ -226,6 +243,7 @@ class _AulaWidgetCoordinator(DataUpdateCoordinator):
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
         *,
         name: str,
         update_interval: timedelta,
@@ -240,6 +258,7 @@ class _AulaWidgetCoordinator(DataUpdateCoordinator):
         self.client = client
         self.profile = profile
         self.widget_context = widget_context
+        self.token_manager = token_manager
         # Pre-build name lookup for child matching
         self._child_by_name: dict[str, Child] = {
             child.name: child for child in profile.children
@@ -269,6 +288,7 @@ class AulaLibraryCoordinator(
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the library coordinator."""
         super().__init__(
@@ -276,13 +296,14 @@ class AulaLibraryCoordinator(
             client,
             profile,
             widget_context,
+            token_manager,
             name="Aula Library",
             update_interval=timedelta(seconds=LIBRARY_POLL_INTERVAL),
         )
 
     async def _async_update_data(self) -> dict[int, LibraryChildData]:
         """Fetch library status and distribute to children."""
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             status = await self.client.widgets.get_library_status(
                 widget_id=WIDGET_BIBLIOTEKET,
                 children=self.widget_context.child_filter,
@@ -323,6 +344,7 @@ class AulaMUTasksCoordinator(
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the MU tasks coordinator."""
         super().__init__(
@@ -330,6 +352,7 @@ class AulaMUTasksCoordinator(
             client,
             profile,
             widget_context,
+            token_manager,
             name="Aula MU Tasks",
             update_interval=timedelta(seconds=MU_TASKS_POLL_INTERVAL),
         )
@@ -337,7 +360,7 @@ class AulaMUTasksCoordinator(
     async def _async_update_data(self) -> dict[int, list[MUTask]]:
         """Fetch MU tasks and distribute to children."""
         week = dt_util.now().strftime("%G-W%V")
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             tasks = await self.client.widgets.get_mu_tasks(
                 widget_id=WIDGET_MIN_UDDANNELSE,
                 child_filter=self.widget_context.child_filter,
@@ -370,6 +393,7 @@ class AulaEasyIQCoordinator(
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the EasyIQ coordinator."""
         super().__init__(
@@ -377,6 +401,7 @@ class AulaEasyIQCoordinator(
             client,
             profile,
             widget_context,
+            token_manager,
             name="Aula EasyIQ",
             update_interval=timedelta(seconds=EASYIQ_POLL_INTERVAL),
         )
@@ -409,7 +434,7 @@ class AulaEasyIQCoordinator(
             )
             return child.id, EasyIQChildData(weekplan=weekplan, homework=homework)
 
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             results = await asyncio.gather(
                 *(_fetch_child(child) for child in self.profile.children)
             )
@@ -429,6 +454,7 @@ class AulaMeebookCoordinator(
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the Meebook coordinator."""
         super().__init__(
@@ -436,6 +462,7 @@ class AulaMeebookCoordinator(
             client,
             profile,
             widget_context,
+            token_manager,
             name="Aula Meebook",
             update_interval=timedelta(seconds=MEEBOOK_POLL_INTERVAL),
         )
@@ -443,7 +470,7 @@ class AulaMeebookCoordinator(
     async def _async_update_data(self) -> dict[int, list[MeebookTask]]:
         """Fetch Meebook weekplan and distribute tasks to children."""
         week = dt_util.now().strftime("%G-W%V")
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             student_plans = await self.client.widgets.get_meebook_weekplan(
                 child_filter=self.widget_context.child_filter,
                 institution_filter=self.widget_context.institution_filter,
@@ -476,6 +503,7 @@ class AulaHuskelistenCoordinator(
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
     ) -> None:
         """Initialize the Huskelisten coordinator."""
         super().__init__(
@@ -483,6 +511,7 @@ class AulaHuskelistenCoordinator(
             client,
             profile,
             widget_context,
+            token_manager,
             name="Aula Huskelisten",
             update_interval=timedelta(seconds=HUSKELISTEN_POLL_INTERVAL),
         )
@@ -493,7 +522,7 @@ class AulaHuskelistenCoordinator(
         from_date = now.strftime("%Y-%m-%d")
         due_no_later_than = (now + timedelta(days=30)).strftime("%Y-%m-%d")
 
-        async with _aula_api_errors():
+        async with _aula_api_errors(self.token_manager):
             user_reminders_list = await self.client.widgets.get_momo_reminders(
                 children=self.widget_context.child_filter,
                 institutions=self.widget_context.institution_filter,

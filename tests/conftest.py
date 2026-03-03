@@ -399,6 +399,15 @@ def mock_config_entry() -> MockConfigEntry:
 
 
 @pytest.fixture
+def mock_token_manager() -> AsyncMock:
+    """Create a mock AulaTokenManager."""
+    tm = AsyncMock()
+    tm.async_refresh_token = AsyncMock()
+    tm.async_refresh_and_rebuild_client = AsyncMock()
+    return tm
+
+
+@pytest.fixture
 def mock_setup_entry() -> Generator[AsyncMock]:
     """Override async_setup_entry."""
     with patch(

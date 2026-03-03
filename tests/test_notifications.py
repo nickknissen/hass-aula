@@ -18,7 +18,7 @@ async def test_first_fetch_does_not_fire_events(hass: HomeAssistant) -> None:
     notification = mock_notification(notification_id="1")
     client.get_notifications_for_active_profile = AsyncMock(return_value=[notification])
 
-    coordinator = AulaNotificationsCoordinator(hass, client)
+    coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
     coordinator.config_entry = MagicMock()
 
     fired_events = []
@@ -37,7 +37,7 @@ async def test_second_fetch_same_notifications_no_events(hass: HomeAssistant) ->
     notification = mock_notification(notification_id="1")
     client.get_notifications_for_active_profile = AsyncMock(return_value=[notification])
 
-    coordinator = AulaNotificationsCoordinator(hass, client)
+    coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
     coordinator.config_entry = MagicMock()
 
     fired_events = []
@@ -72,7 +72,7 @@ async def test_new_notification_fires_event_with_correct_payload(
 
     # First fetch returns only the existing notification
     client.get_notifications_for_active_profile = AsyncMock(return_value=[existing])
-    coordinator = AulaNotificationsCoordinator(hass, client)
+    coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
     coordinator.config_entry = MagicMock()
 
     fired_events = []
@@ -109,7 +109,7 @@ async def test_multiple_new_notifications_fire_separate_events(
     new_b = mock_notification(notification_id="3", title="Third")
 
     client.get_notifications_for_active_profile = AsyncMock(return_value=[existing])
-    coordinator = AulaNotificationsCoordinator(hass, client)
+    coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
     coordinator.config_entry = MagicMock()
 
     fired_events = []
@@ -140,7 +140,7 @@ async def test_unread_count_sensor_state(hass: HomeAssistant) -> None:
         return_value=[read_notif, unread_a, unread_b]
     )
 
-    coordinator = AulaNotificationsCoordinator(hass, client)
+    coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
     coordinator.config_entry = MagicMock()
 
     data = await coordinator._async_update_data()

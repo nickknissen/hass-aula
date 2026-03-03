@@ -14,6 +14,17 @@ from custom_components.hass_aula.const import DOMAIN
 from .conftest import make_config_entry, mock_child, mock_profile
 
 
+def _make_refreshed_client() -> AsyncMock:
+    """Create a mock client as returned by token refresh."""
+    client = AsyncMock()
+    client.get_profile = AsyncMock(return_value=mock_profile())
+    client.get_daily_overview = AsyncMock(return_value=None)
+    client.get_calendar_events = AsyncMock(return_value=[])
+    client.get_notifications_for_active_profile = AsyncMock(return_value=[])
+    client.close = AsyncMock()
+    return client
+
+
 async def test_setup_entry(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
@@ -33,10 +44,16 @@ async def test_setup_entry(
 async def test_setup_entry_auth_error(
     hass: HomeAssistant,
 ) -> None:
-    """Test setup fails with auth error."""
-    with patch(
-        "custom_components.hass_aula.create_client",
-        side_effect=AulaAuthenticationError("Auth failed", 401),
+    """Test setup fails with auth error when refresh also fails."""
+    with (
+        patch(
+            "custom_components.hass_aula.create_client",
+            side_effect=AulaAuthenticationError("Auth failed", 401),
+        ),
+        patch(
+            "custom_components.hass_aula.AulaTokenManager.async_refresh_token",
+            side_effect=AulaAuthenticationError("Refresh failed", 0),
+        ),
     ):
         entry = make_config_entry()
         entry.add_to_hass(hass)
@@ -44,6 +61,31 @@ async def test_setup_entry_auth_error(
         await hass.async_block_till_done()
 
         assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+async def test_setup_entry_auth_error_refresh_succeeds(
+    hass: HomeAssistant,
+) -> None:
+    """Test setup recovers when create_client fails but refresh succeeds."""
+    refreshed_client = _make_refreshed_client()
+
+    with (
+        patch(
+            "custom_components.hass_aula.create_client",
+            side_effect=AulaAuthenticationError("Auth failed", 401),
+        ),
+        patch(
+            "custom_components.hass_aula.AulaTokenManager.async_refresh_token",
+            return_value=(refreshed_client, {"tokens": {}}),
+        ),
+    ):
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        assert entry.runtime_data.client is refreshed_client
 
 
 async def test_setup_entry_connection_error(
@@ -65,8 +107,14 @@ async def test_setup_entry_connection_error(
 async def test_setup_entry_profile_auth_error(
     hass: HomeAssistant,
 ) -> None:
-    """Test setup fails when get_profile raises auth error."""
-    with patch("custom_components.hass_aula.create_client") as mock_create:
+    """Test setup fails when get_profile raises auth error and refresh fails."""
+    with (
+        patch("custom_components.hass_aula.create_client") as mock_create,
+        patch(
+            "custom_components.hass_aula.AulaTokenManager.async_refresh_token",
+            side_effect=AulaAuthenticationError("Refresh failed", 0),
+        ),
+    ):
         client = AsyncMock()
         client.get_profile = AsyncMock(
             side_effect=AulaAuthenticationError("Auth failed", 401)
@@ -80,6 +128,36 @@ async def test_setup_entry_profile_auth_error(
         await hass.async_block_till_done()
 
         assert entry.state is ConfigEntryState.SETUP_ERROR
+        client.close.assert_called_once()
+
+
+async def test_setup_entry_profile_auth_error_refresh_succeeds(
+    hass: HomeAssistant,
+) -> None:
+    """Test setup recovers when get_profile fails but refresh succeeds."""
+    refreshed_client = _make_refreshed_client()
+
+    with (
+        patch("custom_components.hass_aula.create_client") as mock_create,
+        patch(
+            "custom_components.hass_aula.AulaTokenManager.async_refresh_token",
+            return_value=(refreshed_client, {"tokens": {}}),
+        ),
+    ):
+        client = AsyncMock()
+        client.get_profile = AsyncMock(
+            side_effect=AulaAuthenticationError("Auth failed", 401)
+        )
+        client.close = AsyncMock()
+        mock_create.return_value = client
+
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        assert entry.runtime_data.client is refreshed_client
         client.close.assert_called_once()
 
 

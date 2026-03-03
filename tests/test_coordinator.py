@@ -57,6 +57,13 @@ def _create_widget_context() -> WidgetContext:
     )
 
 
+def _create_token_manager() -> AsyncMock:
+    """Create a mock token manager for coordinator tests."""
+    tm = AsyncMock()
+    tm.async_refresh_and_rebuild_client = AsyncMock()
+    return tm
+
+
 # --- Presence Coordinator Tests ---
 
 
@@ -67,7 +74,8 @@ async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
     client.get_daily_overview = AsyncMock(return_value=overview)
 
     profile = mock_profile()
-    coordinator = AulaPresenceCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -87,12 +95,36 @@ async def test_presence_coordinator_auth_error(hass: HomeAssistant) -> None:
     )
 
     profile = mock_profile()
-    coordinator = AulaPresenceCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
 
     with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_presence_coordinator_auth_error_refresh_succeeds(
+    hass: HomeAssistant,
+) -> None:
+    """Test presence coordinator raises UpdateFailed after successful refresh."""
+    client = AsyncMock()
+    client.get_daily_overview = AsyncMock(
+        side_effect=AulaAuthenticationError("Auth failed", 401)
+    )
+
+    profile = mock_profile()
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
+
+    entry = _create_config_entry()
+    coordinator.config_entry = entry
+
+    with pytest.raises(UpdateFailed, match="Session refreshed"):
         await coordinator._async_update_data()
 
 
@@ -104,7 +136,8 @@ async def test_presence_coordinator_connection_error(hass: HomeAssistant) -> Non
     )
 
     profile = mock_profile()
-    coordinator = AulaPresenceCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -121,7 +154,8 @@ async def test_presence_coordinator_server_error(hass: HomeAssistant) -> None:
     )
 
     profile = mock_profile()
-    coordinator = AulaPresenceCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -138,7 +172,8 @@ async def test_presence_coordinator_rate_limit_error(hass: HomeAssistant) -> Non
     )
 
     profile = mock_profile()
-    coordinator = AulaPresenceCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -157,7 +192,8 @@ async def test_calendar_coordinator_fetch(hass: HomeAssistant) -> None:
     client.get_calendar_events = AsyncMock(return_value=[event])
 
     profile = mock_profile()
-    coordinator = AulaCalendarCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaCalendarCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -177,7 +213,11 @@ async def test_calendar_coordinator_auth_error(hass: HomeAssistant) -> None:
     )
 
     profile = mock_profile()
-    coordinator = AulaCalendarCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaCalendarCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -194,7 +234,8 @@ async def test_calendar_coordinator_connection_error(hass: HomeAssistant) -> Non
     )
 
     profile = mock_profile()
-    coordinator = AulaCalendarCoordinator(hass, client, profile)
+    tm = _create_token_manager()
+    coordinator = AulaCalendarCoordinator(hass, client, profile, tm)
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
@@ -221,7 +262,8 @@ async def test_library_coordinator_fetch(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -244,7 +286,11 @@ async def test_library_coordinator_auth_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -261,7 +307,8 @@ async def test_library_coordinator_connection_error(hass: HomeAssistant) -> None
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
@@ -285,7 +332,8 @@ async def test_library_coordinator_multi_child(hass: HomeAssistant) -> None:
     client.widgets.get_library_status = AsyncMock(return_value=status)
 
     ctx = _create_widget_context()
-    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -308,7 +356,8 @@ async def test_mu_tasks_coordinator_fetch(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -328,7 +377,11 @@ async def test_mu_tasks_coordinator_auth_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -345,7 +398,8 @@ async def test_mu_tasks_coordinator_connection_error(hass: HomeAssistant) -> Non
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
@@ -366,7 +420,8 @@ async def test_easyiq_coordinator_fetch(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -389,7 +444,11 @@ async def test_easyiq_coordinator_auth_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -407,7 +466,8 @@ async def test_easyiq_coordinator_connection_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
@@ -426,7 +486,8 @@ async def test_meebook_coordinator_fetch(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -445,7 +506,11 @@ async def test_meebook_coordinator_auth_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -462,7 +527,8 @@ async def test_meebook_coordinator_connection_error(hass: HomeAssistant) -> None
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaMeebookCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
@@ -482,7 +548,8 @@ async def test_huskelisten_coordinator_fetch(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -502,7 +569,11 @@ async def test_huskelisten_coordinator_auth_error(hass: HomeAssistant) -> None:
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -519,7 +590,8 @@ async def test_huskelisten_coordinator_connection_error(hass: HomeAssistant) -> 
 
     profile = mock_profile()
     ctx = _create_widget_context()
-    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx)
+    tm = _create_token_manager()
+    coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
