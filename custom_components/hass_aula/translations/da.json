@@ -20,7 +20,7 @@
       },
       "select_widgets": {
         "title": "Vælg dataudbydere",
-        "description": "Vælg hvilke widget-dataudbydere der skal hentes data fra.",
+        "description": "Vælg hvilke widget-dataudbydere der skal hentes data fra. Widgets markeret **(not supported)** er endnu ikke implementeret og vil blive ignoreret.",
         "data": {
           "widgets": "Dataudbydere"
         },

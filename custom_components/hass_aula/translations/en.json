@@ -20,7 +20,7 @@
       },
       "select_widgets": {
         "title": "Select Data Providers",
-        "description": "Select which widget data providers to pull data from.",
+        "description": "Select which widget data providers to pull data from. Widgets marked **(not supported)** are not yet implemented and will be ignored.",
         "data": {
           "widgets": "Data providers"
         },

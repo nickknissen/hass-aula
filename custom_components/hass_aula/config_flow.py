@@ -20,7 +20,14 @@ from homeassistant.config_entries import (
 from homeassistant.helpers import selector
 from slugify import slugify
 
-from .const import CONF_MITID_USERNAME, CONF_TOKEN_DATA, CONF_WIDGETS, DOMAIN, LOGGER
+from .const import (
+    CONF_MITID_USERNAME,
+    CONF_TOKEN_DATA,
+    CONF_WIDGETS,
+    DOMAIN,
+    LOGGER,
+    SUPPORTED_WIDGETS,
+)
 from .qr_view import AulaQRView, generate_animated_qr_svg
 
 if TYPE_CHECKING:
@@ -231,10 +238,20 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             if self._existing_entry
             else []
         )
-        options = [
+        supported = [
             selector.SelectOptionDict(value=w.widget_id, label=w.name)
             for w in self._available_widgets
+            if w.widget_id in SUPPORTED_WIDGETS
         ]
+        unsupported = [
+            selector.SelectOptionDict(
+                value=w.widget_id,
+                label=f"{w.name} (not supported)",
+            )
+            for w in self._available_widgets
+            if w.widget_id not in SUPPORTED_WIDGETS
+        ]
+        options = [*supported, *unsupported]
         return self.async_show_form(
             step_id="select_widgets",
             data_schema=vol.Schema(
