@@ -27,7 +27,7 @@
         "description": "Your Aula session has expired. Click **Submit** to start re-authentication with MitID for **{mitid_username}**."
       },
       "reconfigure": {
-        "description": "Update your MitID username and re-authenticate.",
+        "description": "Token refresh failed. Enter your MitID username to re-authenticate.",
         "data": {
           "mitid_username": "MitID username"
         }
@@ -44,7 +44,8 @@
     "abort": {
       "already_configured": "This MitID account is already configured.",
       "auth_failed": "MitID authentication failed.",
-      "reauth_successful": "Re-authentication successful."
+      "reauth_successful": "Re-authentication successful.",
+      "reconfigure_successful": "Configuration updated successfully."
     }
   },
   "entity": {

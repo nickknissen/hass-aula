@@ -191,32 +191,77 @@ async def test_reauth_flow(
     assert result["reason"] == "reauth_successful"
 
 
-async def test_reconfigure_flow(
+_MOCK_REFRESH = (
+    "custom_components.hass_aula.config_flow.AulaFlowHandler._async_refresh_token"
+)
+
+
+async def test_reconfigure_flow_token_valid(
     hass: HomeAssistant,
     mock_setup_entry: AsyncMock,
 ) -> None:
-    """Test reconfigure flow."""
+    """Test reconfigure skips MitID auth when refresh token is valid."""
     entry = make_config_entry()
     entry.add_to_hass(hass)
 
-    result = await entry.start_reconfigure_flow(hass)
+    refreshed_token_data = {**MOCK_TOKEN_DATA, "timestamp": 1700099999.0}
+
+    with (
+        patch(_MOCK_REFRESH, return_value=refreshed_token_data),
+        patch(_FETCH_WIDGETS, return_value=[]),
+    ):
+        result = await entry.start_reconfigure_flow(hass)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "select_widgets"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_WIDGETS: []},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+
+async def test_reconfigure_flow_token_expired(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reconfigure falls back to MitID auth when refresh fails."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+
+    with patch(_MOCK_REFRESH, side_effect=RuntimeError("Token expired")):
+        result = await entry.start_reconfigure_flow(hass)
+
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reconfigure"
     flow_id = result["flow_id"]
 
-    new_username = "new_user"
-    with patch(
-        "custom_components.hass_aula.config_flow.authenticate",
-        return_value=MOCK_TOKEN_DATA,
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
     ):
         result = await hass.config_entries.flow.async_configure(
             flow_id,
-            user_input={CONF_MITID_USERNAME: new_username},
+            user_input={CONF_MITID_USERNAME: "new_user"},
         )
 
         if result["type"] is FlowResultType.SHOW_PROGRESS:
             await hass.async_block_till_done()
             result = await hass.config_entries.flow.async_configure(flow_id)
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_widgets"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: []},
+        )
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"

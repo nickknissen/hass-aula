@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import ssl
+import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
 import voluptuous as vol
 from aula import WidgetConfiguration, authenticate, create_client
+from aula.auth.mitid_client import MitIDAuthClient
 from aula.http_httpx import HttpxHttpClient
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -41,6 +43,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._httpx_client: httpx.AsyncClient | None = None
         self._qr_view: AulaQRView | None = None
         self._reauth_entry: ConfigEntry | None = None
+        self._is_reconfigure: bool = False
         self._available_widgets: list[WidgetConfiguration] = []
 
     async def async_step_user(
@@ -209,15 +212,23 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             self._available_widgets = await self._async_fetch_widgets()
 
         if user_input is not None:
+            data = {
+                CONF_MITID_USERNAME: self._mitid_username,
+                CONF_TOKEN_DATA: self._token_data,
+                CONF_WIDGETS: user_input.get(CONF_WIDGETS, []),
+            }
+            if self._reauth_entry:
+                return self.async_update_reload_and_abort(self._reauth_entry, data=data)
             return self.async_create_entry(
                 title=self._mitid_username,
-                data={
-                    CONF_MITID_USERNAME: self._mitid_username,
-                    CONF_TOKEN_DATA: self._token_data,
-                    CONF_WIDGETS: user_input.get(CONF_WIDGETS, []),
-                },
+                data=data,
             )
 
+        default_widgets = (
+            list(self._reauth_entry.data.get(CONF_WIDGETS, []))
+            if self._reauth_entry
+            else []
+        )
         options = [
             selector.SelectOptionDict(value=w.widget_id, label=w.name)
             for w in self._available_widgets
@@ -226,7 +237,9 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="select_widgets",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_WIDGETS, default=[]): selector.SelectSelector(
+                    vol.Optional(
+                        CONF_WIDGETS, default=default_widgets
+                    ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=options,
                             multiple=True,
@@ -269,21 +282,37 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         """Handle reconfiguration - allow changing MitID username."""
         errors: dict[str, str] = {}
 
-        if user_input is not None:
-            self._mitid_username = user_input[CONF_MITID_USERNAME]
-            self._reauth_entry = self.hass.config_entries.async_get_entry(
-                self.context["entry_id"]
-            )
-            return await self.async_step_mitid_auth()
-
         reconfigure_entry = self.hass.config_entries.async_get_entry(
             self.context["entry_id"]
         )
-        current_username = (
+        self._reauth_entry = reconfigure_entry
+        self._is_reconfigure = True
+
+        if user_input is not None:
+            self._mitid_username = user_input[CONF_MITID_USERNAME]
+            return await self.async_step_mitid_auth()
+
+        self._mitid_username = (
             reconfigure_entry.data.get(CONF_MITID_USERNAME, "")
             if reconfigure_entry
             else ""
         )
+
+        # Try refreshing the existing token to skip MitID auth
+        if reconfigure_entry:
+            token_data = reconfigure_entry.data.get(CONF_TOKEN_DATA, {})
+            refresh_token = token_data.get("tokens", {}).get("refresh_token")
+            if refresh_token:
+                try:
+                    self._token_data = await self._async_refresh_token(
+                        token_data, refresh_token
+                    )
+                    return await self.async_step_select_widgets()
+                except Exception:  # noqa: BLE001
+                    LOGGER.debug(
+                        "Token refresh failed during reconfigure, "
+                        "falling back to MitID auth"
+                    )
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -291,7 +320,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         CONF_MITID_USERNAME,
-                        default=current_username,
+                        default=self._mitid_username,
                     ): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.TEXT,
@@ -303,8 +332,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_auth_complete(self) -> ConfigFlowResult:
-        """Route to widget selection for new installs, or skip for reauth."""
-        if self._reauth_entry:
+        """Route to widget selection or skip for reauth."""
+        if self._reauth_entry and not self._is_reconfigure:
             return self.async_update_reload_and_abort(
                 self._reauth_entry,
                 data={
@@ -332,6 +361,30 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             return widgets
         finally:
             await http_client.close()
+
+    async def _async_refresh_token(
+        self, token_data: dict[str, Any], refresh_token: str
+    ) -> dict[str, Any]:
+        """Attempt to refresh the access token using the stored refresh token."""
+        ssl_context = await self.hass.async_add_executor_job(
+            ssl.create_default_context,
+        )
+        httpx_client = httpx.AsyncClient(
+            verify=ssl_context, follow_redirects=False, timeout=30
+        )
+        try:
+            auth_client = MitIDAuthClient(mitid_username="", httpx_client=httpx_client)
+            new_tokens = await auth_client.refresh_access_token(refresh_token)
+        finally:
+            await httpx_client.aclose()
+
+        return {
+            "timestamp": time.time(),
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "username": token_data.get("username", ""),
+            "tokens": new_tokens,
+            "cookies": token_data.get("cookies", {}),
+        }
 
     async def _async_authenticate(self) -> dict[str, Any]:
         """Run MitID authentication in background."""
