@@ -40,6 +40,6 @@ hooks = [
 [[repos]]
 repo = "local"
 hooks = [
-    { id = "check-translations", name = "check-translations", language = "system", entry = ".venv/bin/python3 scripts/check_translations", pass_filenames = false, always_run = true },
-    { id = "pytest", name = "pytest", language = "system", entry = ".venv/bin/pytest", pass_filenames = false, always_run = true },
+    { id = "check-translations", name = "check-translations", language = "system", entry = "uv run --no-project scripts/check_translations", pass_filenames = false, always_run = true },
+    { id = "pytest", name = "pytest", language = "system", entry = "uv run pytest", pass_filenames = false, always_run = true },
 ]
