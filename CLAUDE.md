@@ -10,4 +10,3 @@ When trying to understand the `aula` PyPI package, consult **`docs/aula-package-
 - **Manifest:** `custom_components/hass_aula/manifest.json`
 - **Scripts:** `scripts/` (develop, lint, setup, release)
 - **Release:** `scripts/release <version> [--dry-run]`
-
