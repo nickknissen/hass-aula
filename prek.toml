@@ -1,0 +1,45 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "check-added-large-files" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.4"
+
+[[repos.hooks]]
+id = "ruff-check"
+args = ["--fix"]
+files = '^((custom_components|scripts|tests)/.+)?[^/]+\.(py|pyi)$'
+
+[[repos.hooks]]
+id = "ruff-format"
+files = '^((custom_components|scripts|tests)/.+)?[^/]+\.(py|pyi)$'
+
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.1"
+hooks = [
+    { id = "codespell", args = ["-L", "hass,som,sover"] },
+]
+
+[[repos]]
+repo = "https://github.com/adrienverge/yamllint"
+rev = "v1.9.0"
+hooks = [
+    { id = "yamllint", args = ["-c", ".yamllint.yaml"] },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "check-translations", name = "check-translations", language = "system", entry = ".venv/bin/python3 scripts/check_translations", pass_filenames = false, always_run = true },
+    { id = "pytest", name = "pytest", language = "system", entry = ".venv/bin/pytest", pass_filenames = false, always_run = true },
+]
