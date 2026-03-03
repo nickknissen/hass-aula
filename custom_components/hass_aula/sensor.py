@@ -335,6 +335,7 @@ class AulaMUWeeklyNotesSensor(AulaEntity, SensorEntity):
                 {
                     "group_name": letter.group_name,
                     "week_number": letter.week_number,
+                    "content_html": letter.content_html,
                 }
                 for letter in letters[:MAX_ATTRIBUTE_ITEMS]
             ],
