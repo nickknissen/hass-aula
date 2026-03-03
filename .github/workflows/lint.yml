@@ -11,8 +11,8 @@ name: Lint
 permissions: {}
 
 jobs:
-  ruff:
-    name: "Ruff"
+  prek:
+    name: "Prek"
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout the repository
@@ -27,11 +27,7 @@ jobs:
       - name: Install requirements
         run: python3 -m pip install -r requirements.txt
 
-      - name: Lint
-        run: python3 -m ruff check .
-
-      - name: Format
-        run: python3 -m ruff format . --check
-
-      - name: Check translations
-        run: python3 scripts/check_translations
+      - name: Run prek
+        uses: j178/prek-action@v1
+        with:
+          extra-args: --skip pytest
