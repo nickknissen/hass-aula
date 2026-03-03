@@ -194,6 +194,7 @@ class AulaLibraryLoansSensor(AulaEntity, SensorEntity):
     """Sensor showing library loan count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
     _attr_translation_key = "library_loans"
 
     def __init__(
