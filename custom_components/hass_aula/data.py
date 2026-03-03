@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         AulaLibraryCoordinator,
         AulaMeebookCoordinator,
         AulaMUTasksCoordinator,
+        AulaMUUgeplanCoordinator,
         AulaNotificationsCoordinator,
         AulaPresenceCoordinator,
     )
@@ -75,6 +76,7 @@ class AulaRuntimeData:
     notifications_coordinator: AulaNotificationsCoordinator
     library_coordinator: AulaLibraryCoordinator | None = None
     mu_tasks_coordinator: AulaMUTasksCoordinator | None = None
+    mu_ugeplan_coordinator: AulaMUUgeplanCoordinator | None = None
     easyiq_coordinator: AulaEasyIQCoordinator | None = None
     meebook_coordinator: AulaMeebookCoordinator | None = None
     huskelisten_coordinator: AulaHuskelistenCoordinator | None = None
@@ -88,6 +90,7 @@ class AulaRuntimeData:
             self.notifications_coordinator,
             self.library_coordinator,
             self.mu_tasks_coordinator,
+            self.mu_ugeplan_coordinator,
             self.easyiq_coordinator,
             self.meebook_coordinator,
             self.huskelisten_coordinator,

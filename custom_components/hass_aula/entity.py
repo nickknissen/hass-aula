@@ -15,6 +15,7 @@ from .coordinator import (
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
     AulaMUTasksCoordinator,
+    AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
 )
@@ -27,6 +28,7 @@ type AulaChildCoordinator = (
     | AulaCalendarCoordinator
     | AulaLibraryCoordinator
     | AulaMUTasksCoordinator
+    | AulaMUUgeplanCoordinator
     | AulaEasyIQCoordinator
     | AulaMeebookCoordinator
     | AulaHuskelistenCoordinator

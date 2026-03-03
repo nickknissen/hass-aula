@@ -74,6 +74,12 @@ async def async_get_config_entry_diagnostics(
             for child_id, tasks in runtime_data.mu_tasks_coordinator.data.items()
         }
 
+    if runtime_data.mu_ugeplan_coordinator and runtime_data.mu_ugeplan_coordinator.data:
+        widgets["mu_ugeplan"] = {
+            str(child_id): len(letters)
+            for child_id, letters in runtime_data.mu_ugeplan_coordinator.data.items()
+        }
+
     if runtime_data.easyiq_coordinator and runtime_data.easyiq_coordinator.data:
         widgets["easyiq"] = {
             str(child_id): {

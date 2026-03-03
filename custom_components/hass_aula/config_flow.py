@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     SUPPORTED_WIDGETS,
+    WIDGET_FEATURES,
 )
 from .qr_view import AulaQRView, generate_animated_qr_svg
 
@@ -238,19 +239,28 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             if self._existing_entry
             else []
         )
-        supported = [
-            selector.SelectOptionDict(value=w.widget_id, label=w.name)
-            for w in self._available_widgets
-            if w.widget_id in SUPPORTED_WIDGETS
-        ]
-        unsupported = [
-            selector.SelectOptionDict(
-                value=w.widget_id,
-                label=f"{w.name} (not supported)",
-            )
-            for w in self._available_widgets
-            if w.widget_id not in SUPPORTED_WIDGETS
-        ]
+        supported: list[selector.SelectOptionDict] = []
+        unsupported: list[selector.SelectOptionDict] = []
+        for w in self._available_widgets:
+            if w.widget_id in WIDGET_FEATURES:
+                for feature_id, feature_label in WIDGET_FEATURES[w.widget_id]:
+                    supported.append(
+                        selector.SelectOptionDict(
+                            value=feature_id,
+                            label=f"{w.name} \u2014 {feature_label}",
+                        )
+                    )
+            elif w.widget_id in SUPPORTED_WIDGETS:
+                supported.append(
+                    selector.SelectOptionDict(value=w.widget_id, label=w.name)
+                )
+            else:
+                unsupported.append(
+                    selector.SelectOptionDict(
+                        value=w.widget_id,
+                        label=f"{w.name} (not supported)",
+                    )
+                )
         options = [*supported, *unsupported]
         return self.async_show_form(
             step_id="select_widgets",

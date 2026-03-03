@@ -44,6 +44,7 @@ CALENDAR_POLL_INTERVAL = 3600  # 60 minutes
 # Widget poll intervals (seconds)
 LIBRARY_POLL_INTERVAL = 3600  # 60 minutes
 MU_TASKS_POLL_INTERVAL = 1800  # 30 minutes
+MU_UGEPLAN_POLL_INTERVAL = 1800  # 30 minutes
 EASYIQ_POLL_INTERVAL = 1800  # 30 minutes
 MEEBOOK_POLL_INTERVAL = 3600  # 60 minutes
 HUSKELISTEN_POLL_INTERVAL = 1800  # 30 minutes
@@ -56,9 +57,20 @@ SUPPORTED_WIDGETS: frozenset[str] = frozenset(
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,
         WIDGET_MEEBOOK,
-        WIDGET_MIN_UDDANNELSE,
     }
 )
+
+# Virtual feature IDs for widgets that expose multiple sub-features.
+FEATURE_MU_TASKS = "mu_tasks"
+FEATURE_MU_UGEPLAN = "mu_ugeplan"
+
+# Widgets with sub-features: maps real widget ID → list of (feature_id, label).
+WIDGET_FEATURES: dict[str, list[tuple[str, str]]] = {
+    WIDGET_MIN_UDDANNELSE: [
+        (FEATURE_MU_TASKS, "Opgaver"),
+        (FEATURE_MU_UGEPLAN, "Ugenoter"),
+    ],
+}
 
 PARALLEL_UPDATES = 1
 

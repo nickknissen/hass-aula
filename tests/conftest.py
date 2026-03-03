@@ -15,6 +15,11 @@ from aula.models.library import LibraryStatus
 from aula.models.meebook_weekplan import MeebookDayPlan, MeebookStudentPlan, MeebookTask
 from aula.models.momo_huskeliste import AssignmentReminder, TeamReminder, UserReminders
 from aula.models.mu_task import MUTaskClass
+from aula.models.mu_weekly_letter import (
+    MUWeeklyInstitution,
+    MUWeeklyLetter,
+    MUWeeklyPerson,
+)
 from aula.models.notification import Notification
 from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
@@ -358,6 +363,43 @@ def mock_user_reminders(
     return ur
 
 
+def mock_mu_weekly_letter(
+    group_id: int = 1,
+    group_name: str = "3A",
+    content_html: str = "<p>Weekly update</p>",
+    week_number: int = 5,
+    sort_order: int = 0,
+) -> MagicMock:
+    """Create a mock MUWeeklyLetter object."""
+    letter = MagicMock(spec=MUWeeklyLetter)
+    letter.group_id = group_id
+    letter.group_name = group_name
+    letter.content_html = content_html
+    letter.week_number = week_number
+    letter.sort_order = sort_order
+    return letter
+
+
+def mock_mu_weekly_person(
+    name: str = "Test Child",
+    person_id: int = 1,
+    letters: list | None = None,
+    institution_name: str = "Test School",
+    institution_code: int = 1,
+) -> MagicMock:
+    """Create a mock MUWeeklyPerson with a single institution."""
+    person = MagicMock(spec=MUWeeklyPerson)
+    person.name = name
+    person.id = person_id
+    person.unilogin = "test_uni"
+    inst = MagicMock(spec=MUWeeklyInstitution)
+    inst.name = institution_name
+    inst.code = institution_code
+    inst.letters = letters or [mock_mu_weekly_letter()]
+    person.institutions = [inst]
+    return person
+
+
 def _setup_widget_mocks(client: AsyncMock) -> None:
     """Set up widget-related mock methods on a client."""
     client.get_profile_context = AsyncMock(
@@ -366,6 +408,7 @@ def _setup_widget_mocks(client: AsyncMock) -> None:
     client.widgets = MagicMock()
     client.widgets.get_library_status = AsyncMock(return_value=mock_library_status())
     client.widgets.get_mu_tasks = AsyncMock(return_value=[])
+    client.widgets.get_ugeplan = AsyncMock(return_value=[])
     client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[])
     client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
     client.widgets.get_meebook_weekplan = AsyncMock(return_value=[])

@@ -13,6 +13,9 @@
       "mu_tasks": {
         "default": "mdi:clipboard-check-outline"
       },
+      "mu_weekly_notes": {
+        "default": "mdi:email-newsletter"
+      },
       "easyiq_weekplan": {
         "default": "mdi:calendar-week"
       },

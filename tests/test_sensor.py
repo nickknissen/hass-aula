@@ -9,11 +9,12 @@ from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
+    FEATURE_MU_TASKS,
+    FEATURE_MU_UGEPLAN,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
-    WIDGET_MIN_UDDANNELSE,
 )
 
 from .conftest import (
@@ -27,6 +28,8 @@ from .conftest import (
     mock_library_status,
     mock_meebook_student_plan,
     mock_mu_task,
+    mock_mu_weekly_letter,
+    mock_mu_weekly_person,
     mock_team_reminder,
     mock_user_reminders,
 )
@@ -245,7 +248,7 @@ async def test_mu_tasks_sensor(
     task2 = mock_mu_task(task_id="2", is_completed=True, student_name="Test Child")
     mock_aula_client.widgets.get_mu_tasks = AsyncMock(return_value=[task1, task2])
 
-    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE])
+    entry = make_widget_config_entry(widgets=[FEATURE_MU_TASKS])
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -421,5 +424,62 @@ async def test_huskelisten_sensor_empty(
     await hass.async_block_till_done()
 
     state = hass.states.get("sensor.test_child_reminders")
+    assert state is not None
+    assert state.state == "0"
+
+
+# --- MU Weekly Notes Sensor Tests ---
+
+
+async def test_mu_weekly_notes_sensor(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test MU weekly notes sensor shows note count and attributes."""
+    letter1 = mock_mu_weekly_letter(group_name="3A", week_number=5)
+    letter2 = mock_mu_weekly_letter(group_id=2, group_name="3B", week_number=5)
+    person = mock_mu_weekly_person(name="Test Child", letters=[letter1, letter2])
+    mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[person])
+
+    entry = make_widget_config_entry(widgets=[FEATURE_MU_UGEPLAN])
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_weekly_notes")
+    assert state is not None
+    assert state.state == "2"
+    assert len(state.attributes["notes"]) == 2
+    assert state.attributes["notes"][0]["group_name"] == "3A"
+    assert state.attributes["notes"][0]["week_number"] == 5
+
+
+async def test_mu_weekly_notes_sensor_not_created_when_disabled(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test MU weekly notes sensor is not created when feature is disabled."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_weekly_notes")
+    assert state is None
+
+
+async def test_mu_weekly_notes_sensor_empty(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test MU weekly notes sensor with no notes."""
+    mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[])
+
+    entry = make_widget_config_entry(widgets=[FEATURE_MU_UGEPLAN])
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_weekly_notes")
     assert state is not None
     assert state.state == "0"

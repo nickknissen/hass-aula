@@ -21,6 +21,8 @@ from .const import (
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
     DOMAIN,
+    FEATURE_MU_TASKS,
+    FEATURE_MU_UGEPLAN,
     LOGGER,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
@@ -29,7 +31,6 @@ from .const import (
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
-    WIDGET_MIN_UDDANNELSE,
 )
 from .coordinator import (
     AulaCalendarCoordinator,
@@ -38,6 +39,7 @@ from .coordinator import (
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
     AulaMUTasksCoordinator,
+    AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
     _get_child_institution_code,
@@ -52,10 +54,11 @@ if TYPE_CHECKING:
 
     from .data import AulaConfigEntry
 
-# All widget IDs that require building a widget context.
+# All widget/feature IDs that require building a widget context.
 _ALL_WIDGET_IDS = (
     WIDGET_BIBLIOTEKET,
-    WIDGET_MIN_UDDANNELSE,
+    FEATURE_MU_TASKS,
+    FEATURE_MU_UGEPLAN,
     WIDGET_EASYIQ,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_EASYIQ_HOMEWORK,
@@ -70,6 +73,7 @@ class _WidgetCoordinators:
 
     library: AulaLibraryCoordinator | None = None
     mu_tasks: AulaMUTasksCoordinator | None = None
+    mu_ugeplan: AulaMUUgeplanCoordinator | None = None
     easyiq: AulaEasyIQCoordinator | None = None
     meebook: AulaMeebookCoordinator | None = None
     huskelisten: AulaHuskelistenCoordinator | None = None
@@ -145,8 +149,13 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE):
+    if is_widget_enabled(entry, FEATURE_MU_TASKS):
         wc.mu_tasks = AulaMUTasksCoordinator(
+            hass, client, profile, widget_context, token_manager
+        )
+
+    if is_widget_enabled(entry, FEATURE_MU_UGEPLAN):
+        wc.mu_ugeplan = AulaMUUgeplanCoordinator(
             hass, client, profile, widget_context, token_manager
         )
 
@@ -247,7 +256,14 @@ async def async_setup_entry(
     ]
     first_refreshes.extend(
         coord.async_config_entry_first_refresh()
-        for coord in (wc.library, wc.mu_tasks, wc.easyiq, wc.meebook, wc.huskelisten)
+        for coord in (
+            wc.library,
+            wc.mu_tasks,
+            wc.mu_ugeplan,
+            wc.easyiq,
+            wc.meebook,
+            wc.huskelisten,
+        )
         if coord
     )
 
@@ -262,6 +278,7 @@ async def async_setup_entry(
         notifications_coordinator=notifications_coordinator,
         library_coordinator=wc.library,
         mu_tasks_coordinator=wc.mu_tasks,
+        mu_ugeplan_coordinator=wc.mu_ugeplan,
         easyiq_coordinator=wc.easyiq,
         meebook_coordinator=wc.meebook,
         huskelisten_coordinator=wc.huskelisten,

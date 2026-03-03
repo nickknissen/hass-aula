@@ -82,6 +82,9 @@
       "mu_tasks": {
         "name": "Opgaver"
       },
+      "mu_weekly_notes": {
+        "name": "Ugenoter"
+      },
       "easyiq_weekplan": {
         "name": "Ugeplan"
       },

@@ -15,8 +15,9 @@ from aula import (
     CalendarEvent,
     DailyOverview,
 )
-from aula.models import MUTask, Notification
+from aula.models import MUTask, MUWeeklyPerson, Notification
 from aula.models.meebook_weekplan import MeebookTask
+from aula.models.mu_weekly_letter import MUWeeklyLetter
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -31,6 +32,7 @@ from .const import (
     LOGGER,
     MEEBOOK_POLL_INTERVAL,
     MU_TASKS_POLL_INTERVAL,
+    MU_UGEPLAN_POLL_INTERVAL,
     NOTIFICATIONS_POLL_INTERVAL,
     PRESENCE_POLL_INTERVAL,
     WIDGET_BIBLIOTEKET,
@@ -381,6 +383,56 @@ class AulaMUTasksCoordinator(
             child = self._match_child(task.student_name)
             if child and child.id in result:
                 result[child.id].append(task)
+
+        return result
+
+
+class AulaMUUgeplanCoordinator(
+    _AulaWidgetCoordinator,
+    DataUpdateCoordinator[dict[int, list[MUWeeklyLetter]]],
+):
+    """Coordinator for fetching Min Uddannelse weekly notes (ugenoter)."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        profile: Profile,
+        widget_context: WidgetContext,
+        token_manager: AulaTokenManager,
+    ) -> None:
+        """Initialize the MU ugeplan coordinator."""
+        super().__init__(
+            hass,
+            client,
+            profile,
+            widget_context,
+            token_manager,
+            name="Aula MU Ugeplan",
+            update_interval=timedelta(seconds=MU_UGEPLAN_POLL_INTERVAL),
+        )
+
+    async def _async_update_data(self) -> dict[int, list[MUWeeklyLetter]]:
+        """Fetch MU weekly notes and distribute to children."""
+        week = dt_util.now().strftime("%G-W%V")
+        async with _aula_api_errors(self.token_manager):
+            persons: list[MUWeeklyPerson] = await self.client.widgets.get_ugeplan(
+                widget_id=WIDGET_MIN_UDDANNELSE,
+                child_filter=self.widget_context.child_filter,
+                institution_filter=self.widget_context.institution_filter,
+                week=week,
+                session_uuid=self.widget_context.session_uuid,
+            )
+
+        result: dict[int, list[MUWeeklyLetter]] = {
+            child.id: [] for child in self.profile.children
+        }
+
+        for person in persons:
+            child = self._match_child(person.name)
+            if child and child.id in result:
+                for institution in person.institutions:
+                    result[child.id].extend(institution.letters)
 
         return result
 

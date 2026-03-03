@@ -22,6 +22,7 @@ from custom_components.hass_aula.coordinator import (
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
     AulaMUTasksCoordinator,
+    AulaMUUgeplanCoordinator,
     AulaPresenceCoordinator,
 )
 from custom_components.hass_aula.data import (
@@ -37,6 +38,7 @@ from .conftest import (
     mock_library_status,
     mock_meebook_student_plan,
     mock_mu_task,
+    mock_mu_weekly_person,
     mock_profile,
     mock_team_reminder,
     mock_user_reminders,
@@ -592,6 +594,68 @@ async def test_huskelisten_coordinator_connection_error(hass: HomeAssistant) -> 
     ctx = _create_widget_context()
     tm = _create_token_manager()
     coordinator = AulaHuskelistenCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+# --- MU Ugeplan Coordinator Tests ---
+
+
+async def test_mu_ugeplan_coordinator_fetch(hass: HomeAssistant) -> None:
+    """Test MU ugeplan coordinator fetches and distributes weekly notes."""
+    client = AsyncMock()
+    person = mock_mu_weekly_person(name="Test Child")
+    client.widgets = MagicMock()
+    client.widgets.get_ugeplan = AsyncMock(return_value=[person])
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert 1 in data
+    assert len(data[1]) == 1
+    assert data[1][0].group_name == "3A"
+
+
+async def test_mu_ugeplan_coordinator_auth_error(hass: HomeAssistant) -> None:
+    """Test MU ugeplan coordinator raises ConfigEntryAuthFailed on auth error."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_ugeplan = AsyncMock(
+        side_effect=AulaAuthenticationError("Auth failed", 401)
+    )
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_mu_ugeplan_coordinator_connection_error(hass: HomeAssistant) -> None:
+    """Test MU ugeplan coordinator raises UpdateFailed on connection error."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_ugeplan = AsyncMock(
+        side_effect=AulaConnectionError("Connection failed", 0)
+    )
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):

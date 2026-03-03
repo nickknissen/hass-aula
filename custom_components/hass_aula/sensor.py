@@ -17,6 +17,7 @@ from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
     from aula import Child, DailyOverview, Profile
+    from aula.models.mu_weekly_letter import MUWeeklyLetter
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
         AulaLibraryCoordinator,
         AulaMeebookCoordinator,
         AulaMUTasksCoordinator,
+        AulaMUUgeplanCoordinator,
         AulaNotificationsCoordinator,
         AulaPresenceCoordinator,
     )
@@ -85,6 +87,14 @@ async def async_setup_entry(
     if runtime.mu_tasks_coordinator:
         entities.extend(
             AulaMUTasksSensor(coordinator=runtime.mu_tasks_coordinator, child=child)
+            for child in profile.children
+        )
+
+    if runtime.mu_ugeplan_coordinator:
+        entities.extend(
+            AulaMUWeeklyNotesSensor(
+                coordinator=runtime.mu_ugeplan_coordinator, child=child
+            )
             for child in profile.children
         )
 
@@ -283,6 +293,50 @@ class AulaMUTasksSensor(AulaEntity, SensorEntity):
                     "is_completed": t.is_completed,
                 }
                 for t in tasks[:MAX_ATTRIBUTE_ITEMS]
+            ],
+        }
+
+
+class AulaMUWeeklyNotesSensor(AulaEntity, SensorEntity):
+    """Sensor showing Min Uddannelse weekly note count for a child."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+    _attr_translation_key = "mu_weekly_notes"
+
+    def __init__(
+        self,
+        coordinator: AulaMUUgeplanCoordinator,
+        child: Child,
+    ) -> None:
+        """Initialize the MU weekly notes sensor."""
+        super().__init__(coordinator, child)
+        self._attr_unique_id = f"{child.id}_mu_weekly_notes"
+
+    @property
+    def _letters(self) -> list[MUWeeklyLetter]:
+        if not self.coordinator.data:
+            return []
+        return self.coordinator.data.get(self._child.id, [])
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of weekly notes."""
+        return len(self._letters)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return weekly note details."""
+        letters = self._letters
+        if not letters:
+            return {}
+        return {
+            "notes": [
+                {
+                    "group_name": letter.group_name,
+                    "week_number": letter.week_number,
+                }
+                for letter in letters[:MAX_ATTRIBUTE_ITEMS]
             ],
         }
 

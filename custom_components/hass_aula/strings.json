@@ -82,6 +82,9 @@
       "mu_tasks": {
         "name": "Tasks"
       },
+      "mu_weekly_notes": {
+        "name": "Weekly notes"
+      },
       "easyiq_weekplan": {
         "name": "Weekplan"
       },
