@@ -243,6 +243,33 @@ automation:
 
 ---
 
+## Development
+
+### Setup
+
+1. Clone the repository and create a virtual environment:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. Install [prek](https://prek.j178.dev) and use the provided pre-commit config:
+
+   ```bash
+   uv tool install prek
+   prek install
+   ```
+
+### Running Home Assistant locally
+
+```bash
+scripts/develop
+```
+
+This starts a local Home Assistant instance with the integration loaded from `custom_components/`.
+
 ## Contributing
 
 Contributions are welcome! Please open an [issue](https://github.com/nickknissen/hass-aula/issues) or submit a pull request.
