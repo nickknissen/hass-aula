@@ -5,28 +5,14 @@ from __future__ import annotations
 from logging import Logger, getLogger
 
 from aula.const import (
-    WIDGET_BIBLIOTEKET as WIDGET_BIBLIOTEKET,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ as WIDGET_EASYIQ,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ_HOMEWORK as WIDGET_EASYIQ_HOMEWORK,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ_WEEKPLAN as WIDGET_EASYIQ_WEEKPLAN,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_HUSKELISTEN as WIDGET_HUSKELISTEN,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_MEEBOOK as WIDGET_MEEBOOK,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE_TASKS,
-)
-from aula.const import (
-    WIDGET_MIN_UDDANNELSE_UGEPLAN as WIDGET_MIN_UDDANNELSE_UGEPLAN,  # noqa: PLC0414
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_HUSKELISTEN,
+    WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from homeassistant.const import Platform
 
