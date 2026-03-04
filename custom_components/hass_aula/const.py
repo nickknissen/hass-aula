@@ -5,25 +5,14 @@ from __future__ import annotations
 from logging import Logger, getLogger
 
 from aula.const import (
-    WIDGET_BIBLIOTEKET as WIDGET_BIBLIOTEKET,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ as WIDGET_EASYIQ,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ_HOMEWORK as WIDGET_EASYIQ_HOMEWORK,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_EASYIQ_WEEKPLAN as WIDGET_EASYIQ_WEEKPLAN,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_HUSKELISTEN as WIDGET_HUSKELISTEN,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_MEEBOOK as WIDGET_MEEBOOK,  # noqa: PLC0414
-)
-from aula.const import (
-    WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE,  # noqa: PLC0414
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_HUSKELISTEN,
+    WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from homeassistant.const import Platform
 
@@ -57,20 +46,10 @@ SUPPORTED_WIDGETS: frozenset[str] = frozenset(
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,
         WIDGET_MEEBOOK,
+        WIDGET_MIN_UDDANNELSE_TASKS,
+        WIDGET_MIN_UDDANNELSE_UGEPLAN,
     }
 )
-
-# Virtual feature IDs for widgets that expose multiple sub-features.
-FEATURE_MU_TASKS = "mu_tasks"
-FEATURE_MU_UGEPLAN = "mu_ugeplan"
-
-# Widgets with sub-features: maps real widget ID → list of (feature_id, label).
-WIDGET_FEATURES: dict[str, list[tuple[str, str]]] = {
-    WIDGET_MIN_UDDANNELSE: [
-        (FEATURE_MU_TASKS, "Opgaver"),
-        (FEATURE_MU_UGEPLAN, "Ugenoter"),
-    ],
-}
 
 PARALLEL_UPDATES = 1
 

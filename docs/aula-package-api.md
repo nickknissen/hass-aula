@@ -663,7 +663,7 @@ WIDGET_EASYIQ_WEEKPLAN = "0128"
 WIDGET_EASYIQ_HOMEWORK = "0142"
 WIDGET_BIBLIOTEKET = "0019"
 WIDGET_MIN_UDDANNELSE_UGEPLAN = "0029"
-WIDGET_MIN_UDDANNELSE = "0030"
+WIDGET_MIN_UDDANNELSE_TASKS = "0030"
 WIDGET_MEEBOOK = "0004"
 WIDGET_HUSKELISTEN = "0062"
 ```
@@ -909,7 +909,7 @@ Persisted data format:
 
 Most widget methods share a common parameter pattern:
 
-- `widget_id: str` — The widget ID constant (e.g. `WIDGET_MIN_UDDANNELSE`)
+- `widget_id: str` — The widget ID constant (e.g. `WIDGET_MIN_UDDANNELSE_TASKS`)
 - `child_filter: list[str]` — List of child IDs (as strings)
 - `institution_filter: list[str]` — List of institution codes (as strings)
 - `week: str` — ISO week string (e.g. `"2024-W10"`)
@@ -959,7 +959,7 @@ Constants:
 
 ```python
 from aula.const import (
-    WIDGET_EASYIQ, WIDGET_BIBLIOTEKET, WIDGET_MIN_UDDANNELSE,
+    WIDGET_EASYIQ, WIDGET_BIBLIOTEKET, WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MEEBOOK, WIDGET_HUSKELISTEN, ...
 )
 ```

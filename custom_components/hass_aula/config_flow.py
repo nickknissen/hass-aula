@@ -27,7 +27,6 @@ from .const import (
     DOMAIN,
     LOGGER,
     SUPPORTED_WIDGETS,
-    WIDGET_FEATURES,
 )
 from .qr_view import AulaQRView, generate_animated_qr_svg
 
@@ -242,15 +241,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         supported: list[selector.SelectOptionDict] = []
         unsupported: list[selector.SelectOptionDict] = []
         for w in self._available_widgets:
-            if w.widget_id in WIDGET_FEATURES:
-                for feature_id, feature_label in WIDGET_FEATURES[w.widget_id]:
-                    supported.append(
-                        selector.SelectOptionDict(
-                            value=feature_id,
-                            label=f"{w.name} \u2014 {feature_label}",
-                        )
-                    )
-            elif w.widget_id in SUPPORTED_WIDGETS:
+            if w.widget_id in SUPPORTED_WIDGETS:
                 supported.append(
                     selector.SelectOptionDict(value=w.widget_id, label=w.name)
                 )
@@ -262,6 +253,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                     )
                 )
         options = [*supported, *unsupported]
+        valid_values = {opt["value"] for opt in options}
+        default_widgets = [w for w in default_widgets if w in valid_values]
         return self.async_show_form(
             step_id="select_widgets",
             data_schema=vol.Schema(
