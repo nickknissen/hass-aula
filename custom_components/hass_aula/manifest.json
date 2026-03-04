@@ -12,7 +12,7 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nickknissen/hass-aula/issues",
   "requirements": [
-    "aula==0.6.3"
+    "aula==0.7.0"
   ],
   "version": "0.9.1"
 }
