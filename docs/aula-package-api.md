@@ -1,6 +1,6 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==0.6.1`
+> **Package:** `aula==0.6.3`
 > **Source:** `../aula` (relative to this repo)
 > **Last updated:** 2026-03-03
 
