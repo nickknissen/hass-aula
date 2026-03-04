@@ -241,13 +241,20 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         )
         supported: list[selector.SelectOptionDict] = []
         unsupported: list[selector.SelectOptionDict] = []
+        seen_features: set[str] = set()
         for w in self._available_widgets:
             if w.widget_id in WIDGET_FEATURES:
+                # Strip provider suffix (e.g. " - Opgaver") to avoid
+                # duplication with the feature label.
+                base_name = w.name.split(" - ")[0]
                 for feature_id, feature_label in WIDGET_FEATURES[w.widget_id]:
+                    if feature_id in seen_features:
+                        continue
+                    seen_features.add(feature_id)
                     supported.append(
                         selector.SelectOptionDict(
                             value=feature_id,
-                            label=f"{w.name} \u2014 {feature_label}",
+                            label=f"{base_name} \u2014 {feature_label}",
                         )
                     )
             elif w.widget_id in SUPPORTED_WIDGETS:
@@ -262,6 +269,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                     )
                 )
         options = [*supported, *unsupported]
+        valid_values = {opt["value"] for opt in options}
+        default_widgets = [w for w in default_widgets if w in valid_values]
         return self.async_show_form(
             step_id="select_widgets",
             data_schema=vol.Schema(

@@ -25,6 +25,9 @@ from aula.const import (
 from aula.const import (
     WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE,  # noqa: PLC0414
 )
+from aula.const import (
+    WIDGET_MIN_UDDANNELSE_UGEPLAN as WIDGET_MIN_UDDANNELSE_UGEPLAN,  # noqa: PLC0414
+)
 from homeassistant.const import Platform
 
 LOGGER: Logger = getLogger(__package__)
@@ -68,6 +71,9 @@ FEATURE_MU_UGEPLAN = "mu_ugeplan"
 WIDGET_FEATURES: dict[str, list[tuple[str, str]]] = {
     WIDGET_MIN_UDDANNELSE: [
         (FEATURE_MU_TASKS, "Opgaver"),
+        (FEATURE_MU_UGEPLAN, "Ugenoter"),
+    ],
+    WIDGET_MIN_UDDANNELSE_UGEPLAN: [
         (FEATURE_MU_UGEPLAN, "Ugenoter"),
     ],
 }
