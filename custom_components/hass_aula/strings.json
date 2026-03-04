@@ -62,6 +62,9 @@
       "unread_notifications": {
         "name": "Unread notifications"
       },
+      "child_unread_notifications": {
+        "name": "Unread notifications"
+      },
       "presence_status": {
         "name": "Presence status",
         "state": {

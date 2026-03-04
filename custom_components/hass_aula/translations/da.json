@@ -62,6 +62,9 @@
       "unread_notifications": {
         "name": "Ulæste notifikationer"
       },
+      "child_unread_notifications": {
+        "name": "Ulæste notifikationer"
+      },
       "presence_status": {
         "name": "Tilstedeværelsesstatus",
         "state": {

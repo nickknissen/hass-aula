@@ -76,6 +76,12 @@ async def async_setup_entry(
             coordinator=runtime.notifications_coordinator, profile=profile
         )
     )
+    entities.extend(
+        AulaChildNotificationsSensor(
+            coordinator=runtime.notifications_coordinator, child=child
+        )
+        for child in profile.children
+    )
 
     # Widget sensors — only created if the coordinator exists
     if runtime.library_coordinator:
@@ -204,6 +210,60 @@ class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
                     "created_at": n.created_at,
                 }
                 for n in notifications[:5]
+            ],
+        }
+
+
+class AulaChildNotificationsSensor(AulaEntity, SensorEntity):
+    """Sensor showing unread notification count for a specific child."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_translation_key = "child_unread_notifications"
+
+    def __init__(
+        self,
+        coordinator: AulaNotificationsCoordinator,
+        child: Child,
+    ) -> None:
+        """Initialize the child notifications sensor."""
+        super().__init__(coordinator, child)
+        self._attr_unique_id = f"{child.id}_unread_notifications"
+
+    @property
+    def _unread(self) -> list:
+        """Return unread notifications for this child."""
+        notifications = self.coordinator.data or []
+        return [
+            n
+            for n in notifications
+            if not n.is_read and n.institution_profile_id == self._child.id
+        ]
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of unread notifications for this child."""
+        return len(self._unread)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return by-type counts and recent notifications."""
+        unread = self._unread
+        if not unread:
+            return {}
+        by_type: dict[str, int] = {}
+        for n in unread:
+            key = n.event_type or "unknown"
+            by_type[key] = by_type.get(key, 0) + 1
+        return {
+            "by_type": by_type,
+            "recent": [
+                {
+                    "title": n.title,
+                    "module": n.module,
+                    "event_type": n.event_type,
+                    "created_at": n.created_at,
+                }
+                for n in unread[:5]
             ],
         }
 

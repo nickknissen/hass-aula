@@ -32,6 +32,7 @@ type AulaChildCoordinator = (
     | AulaEasyIQCoordinator
     | AulaMeebookCoordinator
     | AulaHuskelistenCoordinator
+    | AulaNotificationsCoordinator
 )
 
 

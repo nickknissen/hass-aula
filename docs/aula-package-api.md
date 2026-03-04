@@ -71,7 +71,7 @@ Supports `async with` context manager.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `get_notifications_for_active_profile` | `async get_notifications_for_active_profile(*, offset: int = 0, limit: int = 50, module: str \| None = None) -> list[Notification]` | Fetch notifications for active profile |
+| `get_notifications_for_active_profile` | `async get_notifications_for_active_profile(*, children_ids: list[int] \| None = None, institution_codes: list[str] \| None = None, offset: int = 0, limit: int = 50, module: str \| None = None) -> list[Notification]` | Fetch notifications for active profile |
 
 ### Messaging
 
@@ -287,7 +287,7 @@ class Notification(AulaDataClass):
     post_id: int | None = None
     album_id: int | None = None
     media_id: int | None = None
-    is_read: bool | None = None
+    institution_profile_id: int | None = None
 ```
 
 ### Post

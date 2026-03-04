@@ -202,6 +202,83 @@ async def test_unread_notifications_counts_none_as_unread(
     assert state.state == "2"
 
 
+async def test_child_unread_notifications_per_child(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test per-child notification sensors filter by institution_profile_id."""
+    from .conftest import mock_child, mock_notification, mock_profile
+
+    child_a = mock_child(child_id=1, name="Child A")
+    child_b = mock_child(child_id=2, name="Child B")
+    profile = mock_profile(children=[child_a, child_b])
+    mock_aula_client.get_profile = AsyncMock(return_value=profile)
+
+    notifications = [
+        mock_notification(
+            notification_id="1",
+            title="Msg A1",
+            event_type="new_message",
+            is_read=False,
+            institution_profile_id=1,
+        ),
+        mock_notification(
+            notification_id="2",
+            title="Msg A2",
+            event_type="new_post",
+            is_read=False,
+            institution_profile_id=1,
+        ),
+        mock_notification(
+            notification_id="3",
+            title="Msg B1",
+            event_type="new_message",
+            is_read=False,
+            institution_profile_id=2,
+        ),
+        mock_notification(
+            notification_id="4",
+            title="Read",
+            event_type="new_message",
+            is_read=True,
+            institution_profile_id=1,
+        ),
+        mock_notification(
+            notification_id="5",
+            title="No child",
+            event_type="new_message",
+            is_read=False,
+            institution_profile_id=None,
+        ),
+    ]
+    mock_aula_client.get_notifications_for_active_profile = AsyncMock(
+        return_value=notifications
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Child A: 2 unread (ids 1, 2)
+    state_a = hass.states.get("sensor.child_a_unread_notifications")
+    assert state_a is not None
+    assert state_a.state == "2"
+    assert state_a.attributes["by_type"] == {"new_message": 1, "new_post": 1}
+    assert len(state_a.attributes["recent"]) == 2
+
+    # Child B: 1 unread (id 3)
+    state_b = hass.states.get("sensor.child_b_unread_notifications")
+    assert state_b is not None
+    assert state_b.state == "1"
+    assert state_b.attributes["by_type"] == {"new_message": 1}
+
+    # Profile total still counts all unread including institution_profile_id=None
+    state_total = hass.states.get("sensor.test_parent_unread_notifications")
+    assert state_total is not None
+    assert state_total.state == "4"
+
+
 # --- Library Sensor Tests ---
 
 
