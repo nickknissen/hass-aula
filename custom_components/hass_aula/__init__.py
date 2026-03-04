@@ -21,8 +21,6 @@ from .const import (
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
     DOMAIN,
-    FEATURE_MU_TASKS,
-    FEATURE_MU_UGEPLAN,
     LOGGER,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
@@ -31,6 +29,8 @@ from .const import (
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from .coordinator import (
     AulaCalendarCoordinator,
@@ -57,8 +57,8 @@ if TYPE_CHECKING:
 # All widget/feature IDs that require building a widget context.
 _ALL_WIDGET_IDS = (
     WIDGET_BIBLIOTEKET,
-    FEATURE_MU_TASKS,
-    FEATURE_MU_UGEPLAN,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
     WIDGET_EASYIQ,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_EASYIQ_HOMEWORK,
@@ -149,12 +149,12 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    if is_widget_enabled(entry, FEATURE_MU_TASKS):
+    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_TASKS):
         wc.mu_tasks = AulaMUTasksCoordinator(
             hass, client, profile, widget_context, token_manager
         )
 
-    if is_widget_enabled(entry, FEATURE_MU_UGEPLAN):
+    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_UGEPLAN):
         wc.mu_ugeplan = AulaMUUgeplanCoordinator(
             hass, client, profile, widget_context, token_manager
         )

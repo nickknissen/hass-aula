@@ -9,12 +9,12 @@ from aula.models.presence import PresenceState
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
-    FEATURE_MU_TASKS,
-    FEATURE_MU_UGEPLAN,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 
 from .conftest import (
@@ -352,7 +352,7 @@ async def test_mu_tasks_sensor(
     task2 = mock_mu_task(task_id="2", is_completed=True, student_name="Test Child")
     mock_aula_client.widgets.get_mu_tasks = AsyncMock(return_value=[task1, task2])
 
-    entry = make_widget_config_entry(widgets=[FEATURE_MU_TASKS])
+    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_TASKS])
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -545,7 +545,7 @@ async def test_mu_weekly_notes_sensor(
     person = mock_mu_weekly_person(name="Test Child", letters=[letter1, letter2])
     mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[person])
 
-    entry = make_widget_config_entry(widgets=[FEATURE_MU_UGEPLAN])
+    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_UGEPLAN])
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -580,7 +580,7 @@ async def test_mu_weekly_notes_sensor_empty(
     """Test MU weekly notes sensor with no notes."""
     mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[])
 
-    entry = make_widget_config_entry(widgets=[FEATURE_MU_UGEPLAN])
+    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_UGEPLAN])
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()

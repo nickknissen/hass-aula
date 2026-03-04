@@ -23,7 +23,7 @@ from aula.const import (
     WIDGET_MEEBOOK as WIDGET_MEEBOOK,  # noqa: PLC0414
 )
 from aula.const import (
-    WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE,  # noqa: PLC0414
+    WIDGET_MIN_UDDANNELSE as WIDGET_MIN_UDDANNELSE_TASKS,
 )
 from aula.const import (
     WIDGET_MIN_UDDANNELSE_UGEPLAN as WIDGET_MIN_UDDANNELSE_UGEPLAN,  # noqa: PLC0414
@@ -60,23 +60,10 @@ SUPPORTED_WIDGETS: frozenset[str] = frozenset(
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,
         WIDGET_MEEBOOK,
+        WIDGET_MIN_UDDANNELSE_TASKS,
+        WIDGET_MIN_UDDANNELSE_UGEPLAN,
     }
 )
-
-# Virtual feature IDs for widgets that expose multiple sub-features.
-FEATURE_MU_TASKS = "mu_tasks"
-FEATURE_MU_UGEPLAN = "mu_ugeplan"
-
-# Widgets with sub-features: maps real widget ID → list of (feature_id, label).
-WIDGET_FEATURES: dict[str, list[tuple[str, str]]] = {
-    WIDGET_MIN_UDDANNELSE: [
-        (FEATURE_MU_TASKS, "Opgaver"),
-        (FEATURE_MU_UGEPLAN, "Ugenoter"),
-    ],
-    WIDGET_MIN_UDDANNELSE_UGEPLAN: [
-        (FEATURE_MU_UGEPLAN, "Ugenoter"),
-    ],
-}
 
 PARALLEL_UPDATES = 1
 

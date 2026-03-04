@@ -37,7 +37,8 @@ from .const import (
     PRESENCE_POLL_INTERVAL,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_WEEKPLAN,
-    WIDGET_MIN_UDDANNELSE,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from .data import EasyIQChildData, HuskelistenChildData, LibraryChildData, WidgetContext
 
@@ -368,7 +369,7 @@ class AulaMUTasksCoordinator(
         week = dt_util.now().strftime("%G-W%V")
         async with _aula_api_errors(self.token_manager):
             tasks = await self.client.widgets.get_mu_tasks(
-                widget_id=WIDGET_MIN_UDDANNELSE,
+                widget_id=WIDGET_MIN_UDDANNELSE_TASKS,
                 child_filter=self.widget_context.child_filter,
                 institution_filter=self.widget_context.institution_filter,
                 week=week,
@@ -417,7 +418,7 @@ class AulaMUUgeplanCoordinator(
         week = dt_util.now().strftime("%G-W%V")
         async with _aula_api_errors(self.token_manager):
             persons: list[MUWeeklyPerson] = await self.client.widgets.get_ugeplan(
-                widget_id=WIDGET_MIN_UDDANNELSE,
+                widget_id=WIDGET_MIN_UDDANNELSE_UGEPLAN,
                 child_filter=self.widget_context.child_filter,
                 institution_filter=self.widget_context.institution_filter,
                 week=week,
