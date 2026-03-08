@@ -2,42 +2,23 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN
-from .coordinator import (
-    AulaCalendarCoordinator,
-    AulaEasyIQCoordinator,
-    AulaHuskelistenCoordinator,
-    AulaLibraryCoordinator,
-    AulaMeebookCoordinator,
-    AulaMUTasksCoordinator,
-    AulaMUUgeplanCoordinator,
-    AulaNotificationsCoordinator,
-    AulaPresenceCoordinator,
-)
+from .coordinator import AulaNotificationsCoordinator
 
 if TYPE_CHECKING:
     from aula import Child, Profile
 
-type AulaChildCoordinator = (
-    AulaPresenceCoordinator
-    | AulaCalendarCoordinator
-    | AulaLibraryCoordinator
-    | AulaMUTasksCoordinator
-    | AulaMUUgeplanCoordinator
-    | AulaEasyIQCoordinator
-    | AulaMeebookCoordinator
-    | AulaHuskelistenCoordinator
-    | AulaNotificationsCoordinator
-)
 
-
-class AulaEntity(
-    CoordinatorEntity[AulaChildCoordinator],
+class AulaEntity[CoordT: DataUpdateCoordinator[Any]](
+    CoordinatorEntity[CoordT],
 ):
     """Base class for Aula entities."""
 
@@ -45,7 +26,7 @@ class AulaEntity(
 
     def __init__(
         self,
-        coordinator: AulaChildCoordinator,
+        coordinator: CoordT,
         child: Child,
     ) -> None:
         """Initialize the entity."""

@@ -127,5 +127,5 @@ class AulaTokenManager:
     def _update_coordinator_clients(self, new_client: AulaApiClient) -> None:
         """Update the client reference on all coordinators."""
         for coord in self._entry.runtime_data.all_coordinators:
-            coord.client = new_client
+            coord.client = new_client  # type: ignore[attr-defined]  # all coordinators have .client
         LOGGER.debug("Updated all coordinator clients after token refresh")

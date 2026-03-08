@@ -13,6 +13,16 @@ from homeassistant.components.sensor import (
 )
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
+from .coordinator import (
+    AulaEasyIQCoordinator,
+    AulaHuskelistenCoordinator,
+    AulaLibraryCoordinator,
+    AulaMeebookCoordinator,
+    AulaMUTasksCoordinator,
+    AulaMUUgeplanCoordinator,
+    AulaNotificationsCoordinator,
+    AulaPresenceCoordinator,
+)
 from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
@@ -21,16 +31,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from .coordinator import (
-        AulaEasyIQCoordinator,
-        AulaHuskelistenCoordinator,
-        AulaLibraryCoordinator,
-        AulaMeebookCoordinator,
-        AulaMUTasksCoordinator,
-        AulaMUUgeplanCoordinator,
-        AulaNotificationsCoordinator,
-        AulaPresenceCoordinator,
-    )
     from .data import (
         AulaConfigEntry,
         EasyIQChildData,
@@ -136,7 +136,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class AulaPresenceSensor(AulaEntity, SensorEntity):
+class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
     """Representation of an Aula presence sensor."""
 
     entity_description = PRESENCE_SENSOR_DESCRIPTION
@@ -158,7 +158,7 @@ class AulaPresenceSensor(AulaEntity, SensorEntity):
     def native_value(self) -> str | None:
         """Return the presence status."""
         overview = self._overview
-        return overview.status.name.lower() if overview else None
+        return overview.status.name.lower() if overview and overview.status else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -214,7 +214,9 @@ class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
         }
 
 
-class AulaChildNotificationsSensor(AulaEntity, SensorEntity):
+class AulaChildNotificationsSensor(
+    AulaEntity[AulaNotificationsCoordinator], SensorEntity
+):
     """Sensor showing unread notification count for a specific child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -264,7 +266,7 @@ class AulaChildNotificationsSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaLibraryLoansSensor(AulaEntity, SensorEntity):
+class AulaLibraryLoansSensor(AulaEntity[AulaLibraryCoordinator], SensorEntity):
     """Sensor showing library loan count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -316,7 +318,7 @@ class AulaLibraryLoansSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaMUTasksSensor(AulaEntity, SensorEntity):
+class AulaMUTasksSensor(AulaEntity[AulaMUTasksCoordinator], SensorEntity):
     """Sensor showing Min Uddannelse task count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -361,7 +363,7 @@ class AulaMUTasksSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaMUWeeklyNotesSensor(AulaEntity, SensorEntity):
+class AulaMUWeeklyNotesSensor(AulaEntity[AulaMUUgeplanCoordinator], SensorEntity):
     """Sensor showing Min Uddannelse weekly note count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -406,7 +408,7 @@ class AulaMUWeeklyNotesSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaEasyIQWeekplanSensor(AulaEntity, SensorEntity):
+class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
     """Sensor showing EasyIQ weekplan appointment count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -453,7 +455,7 @@ class AulaEasyIQWeekplanSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaEasyIQHomeworkSensor(AulaEntity, SensorEntity):
+class AulaEasyIQHomeworkSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
     """Sensor showing EasyIQ homework count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -501,7 +503,7 @@ class AulaEasyIQHomeworkSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaMeebookWeekplanSensor(AulaEntity, SensorEntity):
+class AulaMeebookWeekplanSensor(AulaEntity[AulaMeebookCoordinator], SensorEntity):
     """Sensor showing Meebook weekplan task count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -545,7 +547,7 @@ class AulaMeebookWeekplanSensor(AulaEntity, SensorEntity):
         }
 
 
-class AulaHuskelistenSensor(AulaEntity, SensorEntity):
+class AulaHuskelistenSensor(AulaEntity[AulaHuskelistenCoordinator], SensorEntity):
     """Sensor showing Huskelisten reminder count for a child."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT

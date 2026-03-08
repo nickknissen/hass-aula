@@ -371,7 +371,9 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def _async_fetch_widgets(self) -> list[WidgetConfiguration]:
         """Create a temporary client to fetch available widgets."""
-        cookies = self._token_data.get("cookies", {}) if self._token_data else {}
+        if self._token_data is None:
+            return []
+        cookies = self._token_data.get("cookies", {})
         http_client = await self.hass.async_add_executor_job(HttpxHttpClient, cookies)
         try:
             client = await create_client(self._token_data, http_client=http_client)
@@ -442,7 +444,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 httpx_client=self._httpx_client,
             )
         finally:
-            await self._httpx_client.aclose()
+            if self._httpx_client:
+                await self._httpx_client.aclose()
         LOGGER.debug("aula.authenticate returned successfully")
         return result
 

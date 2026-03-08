@@ -179,7 +179,7 @@ class AulaCalendarCoordinator(
                 child.id: [] for child in self.profile.children
             }
             for event in events:
-                if event.belongs_to in result:
+                if event.belongs_to is not None and event.belongs_to in result:
                     result[event.belongs_to].append(event)
             return result
 
@@ -238,7 +238,7 @@ class AulaNotificationsCoordinator(
         return notifications
 
 
-class _AulaWidgetCoordinator(DataUpdateCoordinator):
+class _AulaWidgetCoordinator[T](DataUpdateCoordinator[T]):
     """Shared base for all widget coordinators."""
 
     config_entry: AulaConfigEntry
@@ -283,8 +283,7 @@ class _AulaWidgetCoordinator(DataUpdateCoordinator):
 
 
 class AulaLibraryCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, LibraryChildData]],
+    _AulaWidgetCoordinator[dict[int, LibraryChildData]],
 ):
     """Coordinator for fetching library loan data."""
 
@@ -339,8 +338,7 @@ class AulaLibraryCoordinator(
 
 
 class AulaMUTasksCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, list[MUTask]]],
+    _AulaWidgetCoordinator[dict[int, list[MUTask]]],
 ):
     """Coordinator for fetching Min Uddannelse tasks."""
 
@@ -388,8 +386,7 @@ class AulaMUTasksCoordinator(
 
 
 class AulaMUUgeplanCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, list[MUWeeklyLetter]]],
+    _AulaWidgetCoordinator[dict[int, list[MUWeeklyLetter]]],
 ):
     """Coordinator for fetching Min Uddannelse weekly notes (ugenoter)."""
 
@@ -438,8 +435,7 @@ class AulaMUUgeplanCoordinator(
 
 
 class AulaEasyIQCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, EasyIQChildData]],
+    _AulaWidgetCoordinator[dict[int, EasyIQChildData]],
 ):
     """Coordinator for fetching EasyIQ weekplan and homework."""
 
@@ -499,8 +495,7 @@ class AulaEasyIQCoordinator(
 
 
 class AulaMeebookCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, list[MeebookTask]]],
+    _AulaWidgetCoordinator[dict[int, list[MeebookTask]]],
 ):
     """Coordinator for fetching Meebook weekplan data."""
 
@@ -548,8 +543,7 @@ class AulaMeebookCoordinator(
 
 
 class AulaHuskelistenCoordinator(
-    _AulaWidgetCoordinator,
-    DataUpdateCoordinator[dict[int, HuskelistenChildData]],
+    _AulaWidgetCoordinator[dict[int, HuskelistenChildData]],
 ):
     """Coordinator for fetching Huskelisten reminders."""
 

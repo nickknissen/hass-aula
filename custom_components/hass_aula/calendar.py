@@ -15,6 +15,7 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.util import dt as dt_util
 
 from .const import PARALLEL_UPDATES as PARALLEL_UPDATES  # noqa: PLC0414
+from .coordinator import AulaCalendarCoordinator
 from .entity import AulaEntity
 
 if TYPE_CHECKING:
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from .coordinator import AulaCalendarCoordinator
     from .data import AulaConfigEntry
 
 
@@ -62,7 +62,7 @@ def _convert_event(event: AulaCalendarEvent) -> CalendarEvent:
     )
 
 
-class AulaCalendarEntity(AulaEntity, CalendarEntity):
+class AulaCalendarEntity(AulaEntity[AulaCalendarCoordinator], CalendarEntity):
     """Representation of an Aula school calendar."""
 
     _attr_translation_key = "school_calendar"
