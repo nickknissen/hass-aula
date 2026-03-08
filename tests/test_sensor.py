@@ -178,18 +178,18 @@ async def test_all_presence_states(
 # --- Notification Sensor Tests ---
 
 
-async def test_unread_notifications_counts_none_as_unread(
+async def test_notifications_sensor_counts_all(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
 ) -> None:
-    """Test that notifications with is_read=None are counted as unread."""
+    """Test that notifications sensor counts all notifications."""
     from .conftest import mock_notification
 
-    n_none = mock_notification(notification_id="1", is_read=None)
-    n_false = mock_notification(notification_id="2", is_read=False)
-    n_true = mock_notification(notification_id="3", is_read=True)
+    n1 = mock_notification(notification_id="1")
+    n2 = mock_notification(notification_id="2")
+    n3 = mock_notification(notification_id="3")
     mock_aula_client.get_notifications_for_active_profile = AsyncMock(
-        return_value=[n_none, n_false, n_true]
+        return_value=[n1, n2, n3]
     )
 
     entry = make_config_entry()
@@ -199,10 +199,10 @@ async def test_unread_notifications_counts_none_as_unread(
 
     state = hass.states.get("sensor.test_parent_unread_notifications")
     assert state is not None
-    assert state.state == "2"
+    assert state.state == "3"
 
 
-async def test_child_unread_notifications_per_child(
+async def test_child_notifications_per_child(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
 ) -> None:
@@ -219,35 +219,24 @@ async def test_child_unread_notifications_per_child(
             notification_id="1",
             title="Msg A1",
             event_type="new_message",
-            is_read=False,
             institution_profile_id=1,
         ),
         mock_notification(
             notification_id="2",
             title="Msg A2",
             event_type="new_post",
-            is_read=False,
             institution_profile_id=1,
         ),
         mock_notification(
             notification_id="3",
             title="Msg B1",
             event_type="new_message",
-            is_read=False,
             institution_profile_id=2,
         ),
         mock_notification(
             notification_id="4",
-            title="Read",
-            event_type="new_message",
-            is_read=True,
-            institution_profile_id=1,
-        ),
-        mock_notification(
-            notification_id="5",
             title="No child",
             event_type="new_message",
-            is_read=False,
             institution_profile_id=None,
         ),
     ]
@@ -260,20 +249,20 @@ async def test_child_unread_notifications_per_child(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # Child A: 2 unread (ids 1, 2)
+    # Child A: 2 notifications (ids 1, 2)
     state_a = hass.states.get("sensor.child_a_unread_notifications")
     assert state_a is not None
     assert state_a.state == "2"
     assert state_a.attributes["by_type"] == {"new_message": 1, "new_post": 1}
     assert len(state_a.attributes["recent"]) == 2
 
-    # Child B: 1 unread (id 3)
+    # Child B: 1 notification (id 3)
     state_b = hass.states.get("sensor.child_b_unread_notifications")
     assert state_b is not None
     assert state_b.state == "1"
     assert state_b.attributes["by_type"] == {"new_message": 1}
 
-    # Profile total still counts all unread including institution_profile_id=None
+    # Profile total counts all notifications including institution_profile_id=None
     state_total = hass.states.get("sensor.test_parent_unread_notifications")
     assert state_total is not None
     assert state_total.state == "4"

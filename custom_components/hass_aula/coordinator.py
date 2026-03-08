@@ -231,7 +231,6 @@ class AulaNotificationsCoordinator(
                             "event_type": n.event_type,
                             "related_child_name": n.related_child_name,
                             "created_at": n.created_at,
-                            "is_read": n.is_read,
                         },
                     )
             self._known_ids = new_ids

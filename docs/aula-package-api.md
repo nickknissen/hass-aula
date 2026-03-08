@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==0.6.3`
+> **Package:** `aula==1.0.1`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-03-03
+> **Last updated:** 2026-03-08
 
 ---
 
@@ -914,6 +914,30 @@ Most widget methods share a common parameter pattern:
 - `institution_filter: list[str]` — List of institution codes (as strings)
 - `week: str` — ISO week string (e.g. `"2024-W10"`)
 - `session_uuid: str` — Unique session identifier
+
+### CLI JSON Output
+
+All CLI commands support `--output json` (or `AULA_OUTPUT=json` env var) to emit machine-readable JSON instead of human-readable text. When active, each command serializes its result via `to_json()` (handles `datetime`, `enum`, and `AulaDataClass` instances) and prints a single JSON document to stdout.
+
+```bash
+aula --output json profile
+aula --output json overview
+aula --output json messages --search "homework"
+```
+
+**Module:** `aula.utils.json`
+
+```python
+def to_json(data: Any) -> str:
+    """Serialize data to JSON with datetime/enum/AulaDataClass support."""
+```
+
+**Module:** `aula.utils.output`
+
+```python
+def output_json(ctx: click.Context, data: Any) -> bool:
+    """If --output json is active, emit JSON and return True."""
+```
 
 ### API Version Handling
 

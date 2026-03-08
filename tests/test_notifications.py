@@ -67,7 +67,6 @@ async def test_new_notification_fires_event_with_correct_payload(
         event_type="new_message",
         related_child_name="Emma",
         created_at="2024-01-15T10:00:00",
-        is_read=False,
     )
 
     # First fetch returns only the existing notification
@@ -96,7 +95,6 @@ async def test_new_notification_fires_event_with_correct_payload(
     assert data["event_type"] == "new_message"
     assert data["related_child_name"] == "Emma"
     assert data["created_at"] == "2024-01-15T10:00:00"
-    assert data["is_read"] is False
 
 
 async def test_multiple_new_notifications_fire_separate_events(
@@ -129,15 +127,15 @@ async def test_multiple_new_notifications_fire_separate_events(
     assert fired_ids == {"2", "3"}
 
 
-async def test_unread_count_sensor_state(hass: HomeAssistant) -> None:
-    """Coordinator data reflects the correct unread count."""
+async def test_notification_count_sensor_state(hass: HomeAssistant) -> None:
+    """Coordinator data reflects the correct notification count."""
     client = AsyncMock()
-    read_notif = mock_notification(notification_id="1", is_read=True)
-    unread_a = mock_notification(notification_id="2", is_read=False)
-    unread_b = mock_notification(notification_id="3", is_read=False)
+    notif_a = mock_notification(notification_id="1")
+    notif_b = mock_notification(notification_id="2")
+    notif_c = mock_notification(notification_id="3")
 
     client.get_notifications_for_active_profile = AsyncMock(
-        return_value=[read_notif, unread_a, unread_b]
+        return_value=[notif_a, notif_b, notif_c]
     )
 
     coordinator = AulaNotificationsCoordinator(hass, client, AsyncMock())
@@ -145,5 +143,4 @@ async def test_unread_count_sensor_state(hass: HomeAssistant) -> None:
 
     data = await coordinator._async_update_data()
 
-    unread_count = sum(1 for n in data if not n.is_read)
-    assert unread_count == 2
+    assert len(data) == 3

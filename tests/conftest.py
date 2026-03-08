@@ -167,7 +167,6 @@ def mock_notification(
     event_type: str | None = None,
     related_child_name: str | None = None,
     created_at: str | None = None,
-    is_read: bool = False,
     institution_profile_id: int | None = None,
 ) -> MagicMock:
     """Create a mock Notification object."""
@@ -178,7 +177,6 @@ def mock_notification(
     notification.event_type = event_type
     notification.related_child_name = related_child_name
     notification.created_at = created_at
-    notification.is_read = is_read
     notification.institution_profile_id = institution_profile_id
     return notification
 

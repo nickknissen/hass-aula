@@ -192,9 +192,9 @@ class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
 
     @property
     def native_value(self) -> int:
-        """Return the number of unread notifications."""
+        """Return the number of notifications."""
         notifications = self.coordinator.data or []
-        return sum(1 for n in notifications if not n.is_read)
+        return len(notifications)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -230,28 +230,24 @@ class AulaChildNotificationsSensor(AulaEntity, SensorEntity):
         self._attr_unique_id = f"{child.id}_unread_notifications"
 
     @property
-    def _unread(self) -> list:
-        """Return unread notifications for this child."""
+    def _child_notifications(self) -> list:
+        """Return notifications for this child."""
         notifications = self.coordinator.data or []
-        return [
-            n
-            for n in notifications
-            if not n.is_read and n.institution_profile_id == self._child.id
-        ]
+        return [n for n in notifications if n.institution_profile_id == self._child.id]
 
     @property
     def native_value(self) -> int:
-        """Return the number of unread notifications for this child."""
-        return len(self._unread)
+        """Return the number of notifications for this child."""
+        return len(self._child_notifications)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return by-type counts and recent notifications."""
-        unread = self._unread
-        if not unread:
+        child_notifs = self._child_notifications
+        if not child_notifs:
             return {}
         by_type: dict[str, int] = {}
-        for n in unread:
+        for n in child_notifs:
             key = n.event_type or "unknown"
             by_type[key] = by_type.get(key, 0) + 1
         return {
@@ -263,7 +259,7 @@ class AulaChildNotificationsSensor(AulaEntity, SensorEntity):
                     "event_type": n.event_type,
                     "created_at": n.created_at,
                 }
-                for n in unread[:5]
+                for n in child_notifs[:5]
             ],
         }
 

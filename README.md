@@ -135,7 +135,6 @@ Fired each time a **new** notification appears on your Aula account (checked eve
 | `event_type` | `string \| null` | Event type within the module |
 | `related_child_name` | `string \| null` | Name of the child this notification relates to |
 | `created_at` | `string \| null` | ISO timestamp of when the notification was created |
-| `is_read` | `bool \| null` | Whether the notification has been read |
 
 ---
 
@@ -195,15 +194,12 @@ automation:
 
 ```yaml
 automation:
-  - alias: "Forward unread Aula messages"
+  - alias: "Forward Aula messages"
     trigger:
       - platform: event
         event_type: hass_aula_notification
         event_data:
           module: messaging
-    condition:
-      - condition: template
-        value_template: "{{ not trigger.event.data.is_read }}"
     action:
       - service: notify.mobile_app_my_phone
         data:

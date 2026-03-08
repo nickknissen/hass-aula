@@ -71,6 +71,6 @@ Uses `asyncio.Lock` to prevent concurrent refreshes. `async_refresh_and_rebuild_
 
 ## Project Conventions
 
-- Python 3.13, ruff with `select = ["ALL"]`, strict mypy
+- Python 3.14, ruff with `select = ["ALL"]`, strict mypy
 - Translations source of truth: `strings.json` — run `check_translations` to verify `translations/*.json` stay in sync
 - Pre-commit via [prek](https://prek.j178.dev) (`prek.toml`): ruff, codespell, yamllint, check-translations, pytest
