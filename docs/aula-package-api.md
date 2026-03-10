@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.0.1`
+> **Package:** `aula==1.1.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-03-08
+> **Last updated:** 2026-03-10
 
 ---
 
@@ -66,6 +66,13 @@ Supports `async with` context manager.
 |--------|-----------|-------------|
 | `get_daily_overview` | `async get_daily_overview(child_id: int) -> DailyOverview \| None` | Fetch daily overview for a specific child |
 | `get_presence_templates` | `async get_presence_templates(institution_profile_ids: list[int], from_date: date, to_date: date) -> list[PresenceWeekTemplate]` | Fetch presence week templates for given profiles and date range |
+| `update_presence_template` | `async update_presence_template(institution_profile_id: int, by_date: date, *, entry_time: str, exit_time: str, activity_type: int = 0, exit_with: str \| None = None, comment: str \| None = None, template_id: int \| None = None, repeat_pattern: str = "Never", expires_at: str \| None = None) -> bool` | Create or update presence template (planned entry/exit times); returns True on success |
+| `get_pickup_responsibles` | `async get_pickup_responsibles(child_ids: list[int]) -> list[ChildPickupResponsibles]` | Fetch pickup responsibles (family members + saved suggestions) for children |
+| `get_presence_registrations` | `async get_presence_registrations(institution_profile_ids: list[int], from_date: date, to_date: date) -> list[PresenceRegistration]` | Fetch presence registrations for given profiles and date range (employee-only) |
+| `get_presence_registration_detail` | `async get_presence_registration_detail(registration_id: int) -> PresenceRegistrationDetail \| None` | Fetch detail for a single presence registration (employee-only) |
+| `get_presence_states` | `async get_presence_states(institution_profile_ids: list[int] \| None = None) -> list[ChildPresenceState]` | Fetch current presence states for children |
+| `get_presence_configuration` | `async get_presence_configuration(child_ids: list[int]) -> list[PresenceConfiguration]` | Fetch presence configuration (pickup rules, etc.) by child IDs |
+| `get_activity_overview` | `async get_activity_overview(institution_profile_ids: list[int], week: int, year: int) -> PresenceWeekOverview \| None` | Fetch activity/week overview for presence (employee-only) |
 
 ### Notifications
 
@@ -577,12 +584,87 @@ class SpareTimeActivity(AulaDataClass):
     comment: str | None = None
 ```
 
+### Presence Registration Models
+
+```python
+@dataclass
+class PresenceRegistration(AulaDataClass):
+    id: int | None = None
+    institution_profile_id: int | None = None
+    status: PresenceState | None = None
+    date: str | None = None
+    entry_time: str | None = None
+    exit_time: str | None = None
+    check_in_time: str | None = None
+    check_out_time: str | None = None
+
+@dataclass
+class PresenceRegistrationDetail(AulaDataClass):
+    id: int | None = None
+    child_name: str | None = None
+    institution_profile_id: int | None = None
+    status: PresenceState | None = None
+    date: str | None = None
+    entry_time: str | None = None
+    exit_time: str | None = None
+    check_in_time: str | None = None
+    check_out_time: str | None = None
+    exit_with: str | None = None
+    comment: str | None = None
+
+@dataclass
+class ChildPresenceState(AulaDataClass):
+    institution_profile_id: int | None = None
+    name: str | None = None                    # From uniStudent.name in API response
+    status: PresenceState | None = None        # Parsed from "state" field in API
+
+@dataclass
+class PresenceConfiguration(AulaDataClass):
+    child_id: int | None = None                # From uniStudentId in API response
+    institution_code: str | None = None
+    institution_name: str | None = None
+    pickup: bool | None = None
+    go_home_with: bool | None = None
+    self_decider: bool | None = None
+
+@dataclass
+class PresenceWeekOverview(AulaDataClass):
+    days: list[PresenceDay] = []
+
+@dataclass
+class PresenceDay(AulaDataClass):
+    date: str | None = None
+    activities: list[PresenceActivity] = []
+
+@dataclass
+class PresenceActivity(AulaDataClass):
+    title: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+```
+
 ### ProfilePicture
 
 ```python
 @dataclass
 class ProfilePicture(AulaDataClass):
     url: str | None = None
+```
+
+### ChildPickupResponsibles / PickupPerson
+
+```python
+@dataclass
+class PickupPerson(AulaDataClass):
+    name: str = ""
+    relation: str | None = None
+    institution_profile_id: int | None = None
+    suggestion_id: int | None = None
+
+@dataclass
+class ChildPickupResponsibles(AulaDataClass):
+    uni_student_id: int = 0
+    persons: list[PickupPerson] = []
 ```
 
 ---
@@ -969,7 +1051,11 @@ from aula.models import (
     Appointment, EasyIQHomework, LibraryLoan, LibraryStatus,
     MeebookStudentPlan, MomoUserCourses, UserReminders,
     MUTask, MUWeeklyPerson, Notification, Post,
+    ChildPickupResponsibles, PickupPerson,
     PresenceWeekTemplate, DayTemplate, SpareTimeActivity,
+    PresenceRegistration, PresenceRegistrationDetail,
+    ChildPresenceState, PresenceConfiguration,
+    PresenceWeekOverview, PresenceDay, PresenceActivity,
 )
 ```
 
