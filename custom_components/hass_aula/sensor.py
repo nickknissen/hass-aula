@@ -383,29 +383,43 @@ class AulaMUWeeklyNotesSensor(AulaEntity[AulaMUUgeplanCoordinator], SensorEntity
     def _letters(self) -> list[MUWeeklyLetter]:
         if not self.coordinator.data:
             return []
-        return self.coordinator.data.get(self._child.id, [])
+        return self.coordinator.data.current.get(self._child.id, [])
+
+    @property
+    def _next_week_letters(self) -> list[MUWeeklyLetter]:
+        if not self.coordinator.data:
+            return []
+        return self.coordinator.data.next_week.get(self._child.id, [])
 
     @property
     def native_value(self) -> int:
         """Return the number of weekly notes."""
         return len(self._letters)
 
+    @staticmethod
+    def _format_letters(letters: list[MUWeeklyLetter]) -> list[dict[str, Any]]:
+        return [
+            {
+                "group_name": letter.group_name,
+                "week_number": letter.week_number,
+                "content_html": letter.content_html,
+            }
+            for letter in letters[:MAX_ATTRIBUTE_ITEMS]
+        ]
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return weekly note details."""
+        """Return weekly note details for current and next week."""
         letters = self._letters
-        if not letters:
+        next_week_letters = self._next_week_letters
+        if not letters and not next_week_letters:
             return {}
-        return {
-            "notes": [
-                {
-                    "group_name": letter.group_name,
-                    "week_number": letter.week_number,
-                    "content_html": letter.content_html,
-                }
-                for letter in letters[:MAX_ATTRIBUTE_ITEMS]
-            ],
-        }
+        attrs: dict[str, Any] = {}
+        if letters:
+            attrs["notes"] = self._format_letters(letters)
+        if next_week_letters:
+            attrs["next_week_notes"] = self._format_letters(next_week_letters)
+        return attrs
 
 
 class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):

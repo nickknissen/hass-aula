@@ -38,6 +38,7 @@ from .conftest import (
     mock_library_status,
     mock_meebook_student_plan,
     mock_mu_task,
+    mock_mu_weekly_letter,
     mock_mu_weekly_person,
     mock_profile,
     mock_team_reminder,
@@ -607,8 +608,12 @@ async def test_mu_ugeplan_coordinator_fetch(hass: HomeAssistant) -> None:
     """Test MU ugeplan coordinator fetches and distributes weekly notes."""
     client = AsyncMock()
     person = mock_mu_weekly_person(name="Test Child")
+    next_person = mock_mu_weekly_person(
+        name="Test Child",
+        letters=[mock_mu_weekly_letter(group_name="3A", week_number=6)],
+    )
     client.widgets = MagicMock()
-    client.widgets.get_ugeplan = AsyncMock(return_value=[person])
+    client.widgets.get_ugeplan = AsyncMock(side_effect=[[person], [next_person]])
 
     profile = mock_profile()
     ctx = _create_widget_context()
@@ -618,9 +623,12 @@ async def test_mu_ugeplan_coordinator_fetch(hass: HomeAssistant) -> None:
 
     data = await coordinator._async_update_data()
 
-    assert 1 in data
-    assert len(data[1]) == 1
-    assert data[1][0].group_name == "3A"
+    assert 1 in data.current
+    assert len(data.current[1]) == 1
+    assert data.current[1][0].group_name == "3A"
+    assert 1 in data.next_week
+    assert len(data.next_week[1]) == 1
+    assert data.next_week[1][0].week_number == 6
 
 
 async def test_mu_ugeplan_coordinator_auth_error(hass: HomeAssistant) -> None:

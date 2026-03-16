@@ -17,7 +17,6 @@ from aula import (
 )
 from aula.models import MUTask, MUWeeklyPerson, Notification
 from aula.models.meebook_weekplan import MeebookTask
-from aula.models.mu_weekly_letter import MUWeeklyLetter
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -46,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from aula import AulaApiClient, Child, Profile
+    from aula.models.mu_weekly_letter import MUWeeklyLetter
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
@@ -385,8 +385,22 @@ class AulaMUTasksCoordinator(
         return result
 
 
+class _MUUgeplanData:
+    """Data container for MU weekly notes (current + next week)."""
+
+    __slots__ = ("current", "next_week")
+
+    def __init__(
+        self,
+        current: dict[int, list[MUWeeklyLetter]],
+        next_week: dict[int, list[MUWeeklyLetter]],
+    ) -> None:
+        self.current = current
+        self.next_week = next_week
+
+
 class AulaMUUgeplanCoordinator(
-    _AulaWidgetCoordinator[dict[int, list[MUWeeklyLetter]]],
+    _AulaWidgetCoordinator[_MUUgeplanData],
 ):
     """Coordinator for fetching Min Uddannelse weekly notes (ugenoter)."""
 
@@ -409,17 +423,15 @@ class AulaMUUgeplanCoordinator(
             update_interval=timedelta(seconds=MU_UGEPLAN_POLL_INTERVAL),
         )
 
-    async def _async_update_data(self) -> dict[int, list[MUWeeklyLetter]]:
-        """Fetch MU weekly notes and distribute to children."""
-        week = dt_util.now().strftime("%G-W%V")
-        async with _aula_api_errors(self.token_manager):
-            persons: list[MUWeeklyPerson] = await self.client.widgets.get_ugeplan(
-                widget_id=WIDGET_MIN_UDDANNELSE_UGEPLAN,
-                child_filter=self.widget_context.child_filter,
-                institution_filter=self.widget_context.institution_filter,
-                week=week,
-                session_uuid=self.widget_context.session_uuid,
-            )
+    async def _fetch_week(self, week: str) -> dict[int, list[MUWeeklyLetter]]:
+        """Fetch MU weekly notes for a single week and distribute to children."""
+        persons: list[MUWeeklyPerson] = await self.client.widgets.get_ugeplan(
+            widget_id=WIDGET_MIN_UDDANNELSE_UGEPLAN,
+            child_filter=self.widget_context.child_filter,
+            institution_filter=self.widget_context.institution_filter,
+            week=week,
+            session_uuid=self.widget_context.session_uuid,
+        )
 
         result: dict[int, list[MUWeeklyLetter]] = {
             child.id: [] for child in self.profile.children
@@ -432,6 +444,18 @@ class AulaMUUgeplanCoordinator(
                     result[child.id].extend(institution.letters)
 
         return result
+
+    async def _async_update_data(self) -> _MUUgeplanData:
+        """Fetch MU weekly notes for current and next week."""
+        now = dt_util.now()
+        current_week = now.strftime("%G-W%V")
+        next_week = (now + timedelta(weeks=1)).strftime("%G-W%V")
+
+        async with _aula_api_errors(self.token_manager):
+            current = await self._fetch_week(current_week)
+            next_week_data = await self._fetch_week(next_week)
+
+        return _MUUgeplanData(current=current, next_week=next_week_data)
 
 
 class AulaEasyIQCoordinator(

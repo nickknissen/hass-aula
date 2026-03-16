@@ -531,8 +531,12 @@ async def test_mu_weekly_notes_sensor(
     """Test MU weekly notes sensor shows note count and attributes."""
     letter1 = mock_mu_weekly_letter(group_name="3A", week_number=5)
     letter2 = mock_mu_weekly_letter(group_id=2, group_name="3B", week_number=5)
+    next_letter = mock_mu_weekly_letter(group_name="3A", week_number=6)
     person = mock_mu_weekly_person(name="Test Child", letters=[letter1, letter2])
-    mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[person])
+    next_person = mock_mu_weekly_person(name="Test Child", letters=[next_letter])
+    mock_aula_client.widgets.get_ugeplan = AsyncMock(
+        side_effect=[[person], [next_person]]
+    )
 
     entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_UGEPLAN])
     entry.add_to_hass(hass)
@@ -546,6 +550,9 @@ async def test_mu_weekly_notes_sensor(
     assert state.attributes["notes"][0]["group_name"] == "3A"
     assert state.attributes["notes"][0]["week_number"] == 5
     assert state.attributes["notes"][0]["content_html"] == "<p>Weekly update</p>"
+    assert len(state.attributes["next_week_notes"]) == 1
+    assert state.attributes["next_week_notes"][0]["group_name"] == "3A"
+    assert state.attributes["next_week_notes"][0]["week_number"] == 6
 
 
 async def test_mu_weekly_notes_sensor_not_created_when_disabled(
@@ -567,7 +574,7 @@ async def test_mu_weekly_notes_sensor_empty(
     mock_aula_client: AsyncMock,
 ) -> None:
     """Test MU weekly notes sensor with no notes."""
-    mock_aula_client.widgets.get_ugeplan = AsyncMock(return_value=[])
+    mock_aula_client.widgets.get_ugeplan = AsyncMock(side_effect=[[], []])
 
     entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_UGEPLAN])
     entry.add_to_hass(hass)
