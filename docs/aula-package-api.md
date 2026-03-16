@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.1.0`
+> **Package:** `aula==1.2.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-03-10
+> **Last updated:** 2026-03-16
 
 ---
 
@@ -86,6 +86,10 @@ Supports `async with` context manager.
 |--------|-----------|-------------|
 | `get_message_threads` | `async get_message_threads(filter_on: str \| None = None) -> list[MessageThread]` | Fetch first page of message threads, sorted by date descending |
 | `get_messages_for_thread` | `async get_messages_for_thread(thread_id: str, limit: int = 5) -> list[Message]` | Fetch latest messages for a specific thread |
+| `get_message_folders` | `async get_message_folders(include_deleted: bool = False) -> list[MessageFolder]` | Fetch message folders |
+| `get_common_inboxes` | `async get_common_inboxes(institution_profile_ids: list[int] \| None = None) -> list[dict]` | Fetch common inboxes |
+| `get_threads_in_bundle` | `async get_threads_in_bundle(bundle_id: int) -> list[MessageThread]` | Fetch threads in a bundle |
+| `get_message_info` | `async get_message_info(thread_id: str, message_id: str) -> dict \| None` | Fetch lightweight message info |
 | `search_messages` | `async search_messages(institution_profile_ids: list[int], institution_codes: list[str], *, text: str = "", from_date: date \| None = None, to_date: date \| None = None, has_attachments: bool \| None = None, limit: int = 100) -> list[Message]` | Search messages with server-side filtering and automatic pagination |
 | `get_all_message_threads` | `async get_all_message_threads(cutoff_date: date) -> list[dict]` | Paginate threads until older than cutoff_date |
 | `get_all_messages_for_thread` | `async get_all_messages_for_thread(thread_id: str) -> list[dict]` | Paginate all messages for a thread |
@@ -95,12 +99,46 @@ Supports `async with` context manager.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `get_calendar_events` | `async get_calendar_events(institution_profile_ids: list[int], start: datetime, end: datetime) -> list[CalendarEvent]` | Fetch calendar events for given profiles and date range |
+| `get_calendar_event` | `async get_calendar_event(event_id: int, occurrence_datetime: str \| None = None) -> dict \| None` | Fetch a single calendar event by ID |
+| `get_important_dates` | `async get_important_dates(limit: int = 10, include_today: bool = True) -> list[dict]` | Fetch upcoming important dates |
+| `get_birthday_events` | `async get_birthday_events(institution_codes: list[str], start: str, end: str) -> list[dict]` | Fetch birthday events for institutions |
+| `get_birthday_events_for_group` | `async get_birthday_events_for_group(group_id: int, start: str, end: str) -> list[dict]` | Fetch birthday events for a group |
+| `get_event_types` | `async get_event_types(institution_codes: list[str] \| None = None) -> list[dict]` | Fetch event types |
+| `get_daily_aggregated_events` | `async get_daily_aggregated_events(institution_profile_ids: list[int], start: str, end: str) -> list[dict]` | Fetch daily aggregated events |
+| `get_events_for_institutions` | `async get_events_for_institutions(institution_codes: list[str], start: str, end: str) -> list[dict]` | Fetch events for institutions |
+| `get_daily_event_count_for_group` | `async get_daily_event_count_for_group(group_id: int, start: str, end: str) -> list[dict]` | Fetch event count per day for a group |
+| `get_events_by_group` | `async get_events_by_group(group_id: int, start: str, end: str) -> list[dict]` | Fetch events by group ID |
+
+### Groups
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get_groups` | `async get_groups(institution_codes: list[str], child_institution_profile_ids: list[int]) -> list[Group]` | Fetch groups for given institution codes and child profile IDs |
+| `get_group` | `async get_group(group_id: int) -> Group \| None` | Fetch a single group by ID |
+| `get_group_members` | `async get_group_members(group_id: int, portal_roles: list[str] \| None = None) -> list[GroupMember]` | Fetch members of a group |
 
 ### Posts
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `get_posts` | `async get_posts(institution_profile_ids: list[int], page: int = 1, limit: int = 10) -> list[Post]` | Fetch posts from Aula |
+| `get_post` | `async get_post(post_id: int) -> Post \| None` | Fetch a single post by ID |
+| `get_comments` | `async get_comments(parent_type: str, parent_id: int, limit: int = 100) -> list[Comment]` | Fetch comments for a given parent (e.g. post) |
+
+### Search
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `find_recipients` | `async find_recipients(text: str, limit: int = 100, doc_types: str \| None = None, portal_roles: list[str] \| None = None) -> list[dict]` | Find message recipients |
+| `find_profiles_and_groups` | `async find_profiles_and_groups(text: str, limit: int = 100) -> dict` | Find profiles and groups |
+| `search` | `async search(text: str, doc_type: str \| None = None, limit: int = 20, offset: int = 0) -> dict` | Global search |
+
+### Contacts
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get_contact_list` | `async get_contact_list(group_id: int, page: int \| None = None, order: str \| None = None) -> list[dict]` | Fetch contact list for a group |
+| `get_contact_parents` | `async get_contact_parents(page: int \| None = None, order: str \| None = None) -> list[dict]` | Fetch other parents |
 
 ### Gallery
 
@@ -108,6 +146,8 @@ Supports `async with` context manager.
 |--------|-----------|-------------|
 | `get_gallery_albums` | `async get_gallery_albums(institution_profile_ids: list[int], limit: int = 1000) -> list[dict]` | Fetch gallery albums as raw dicts |
 | `get_album_pictures` | `async get_album_pictures(institution_profile_ids: list[int], album_id: int, limit: int = 1000) -> list[dict]` | Fetch pictures for a specific album as raw dicts |
+| `get_media_by_id` | `async get_media_by_id(media_id: int) -> dict \| None` | Fetch a single media item by ID |
+| `get_media_by_profile` | `async get_media_by_profile(institution_profile_id: int, limit: int = 100) -> list[dict]` | Fetch media tagged with a profile |
 
 ### File Downloads
 
@@ -132,7 +172,7 @@ These delegate to `self.widgets.*` and will be removed in a future version:
 
 | Attribute | Type | Notes |
 |-----------|------|-------|
-| `api_url` | `str` | Base API URL with version (e.g. `https://api.aula.dk/api/v17`) |
+| `api_url` | `str` | Base API URL with version (e.g. `https://api.aula.dk/api/v23`) |
 | `widgets` | `AulaWidgetsClient` | Widget-specific API client |
 
 ---
@@ -277,6 +317,15 @@ class MessageThread(AulaDataClass):
     subject: str
 ```
 
+### MessageFolder
+
+```python
+@dataclass
+class MessageFolder(AulaDataClass):
+    id: int
+    name: str
+```
+
 ### Notification
 
 ```python
@@ -326,6 +375,20 @@ class Post(AulaDataClass):
     # content_markdown: str — HTML converted to Markdown
 ```
 
+### Comment
+
+```python
+@dataclass
+class Comment(AulaDataClass):
+    id: int
+    content_html: str
+    creator_name: str
+    creator_institution_profile_id: int | None = None
+    created_at: str = ""
+    # Properties:
+    # content: str          — plain text stripped from HTML
+```
+
 ### ProfileReference
 
 ```python
@@ -340,6 +403,28 @@ class ProfileReference(AulaDataClass):
     role: str
     institution_name: str
     profile_picture: dict | None = None
+```
+
+### Group
+
+```python
+@dataclass
+class Group(AulaDataClass):
+    id: int
+    name: str
+    group_type: str = ""
+    institution_code: str = ""
+    description: str = ""
+```
+
+### GroupMember
+
+```python
+@dataclass
+class GroupMember(AulaDataClass):
+    institution_profile_id: int
+    name: str
+    portal_role: str = ""
 ```
 
 ### WidgetConfiguration
@@ -712,11 +797,11 @@ All store `status_code: int` as an attribute.
 ```
 MitIDAuthError                   — Base for MitID auth failures
 ├── MitIDError                   — MitID protocol errors
+│   ├── TokenInvalidError        — TOTP code rejected
+│   └── PasswordInvalidError     — MitID password rejected
 ├── NetworkError                 — Network failures during auth
 ├── SAMLError                    — SAML protocol errors
-├── OAuthError                   — OAuth flow failures
-├── TokenInvalidError            — TOTP code rejected
-└── PasswordInvalidError         — MitID password rejected
+└── OAuthError                   — OAuth flow failures
 ```
 
 ---
@@ -902,7 +987,9 @@ class MitIDAuthClient:
         """Refresh using stored refresh_token. Returns updated token dict."""
 ```
 
-**Properties:** `access_token`, `refresh_token`, `tokens`, `is_authenticated`, `cookies`
+**Properties:** `access_token`, `refresh_token`, `tokens`, `is_authenticated`, `cookies`, `mitid_client`
+
+Supports `async with` context manager.
 
 ### Token Structure
 
@@ -1048,8 +1135,9 @@ Additional models must be imported from `aula.models`:
 
 ```python
 from aula.models import (
-    Appointment, EasyIQHomework, LibraryLoan, LibraryStatus,
-    MeebookStudentPlan, MomoUserCourses, UserReminders,
+    Appointment, Comment, EasyIQHomework, Group, GroupMember,
+    LibraryLoan, LibraryStatus, MeebookStudentPlan,
+    MessageFolder, MomoUserCourses, UserReminders,
     MUTask, MUWeeklyPerson, Notification, Post,
     ChildPickupResponsibles, PickupPerson,
     PresenceWeekTemplate, DayTemplate, SpareTimeActivity,

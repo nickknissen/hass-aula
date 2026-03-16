@@ -23,7 +23,7 @@ rules:
     comment: All flow paths tested.
   dependency-transparency:
     status: done
-    comment: Uses aula==0.6.1 from PyPI.
+    comment: Uses aula==1.2.0 from PyPI.
   docs-actions:
     status: exempt
     comment: No custom actions/services.
