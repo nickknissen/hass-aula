@@ -346,7 +346,7 @@ async def test_mu_tasks_sensor(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_child_tasks")
+    state = hass.states.get("sensor.test_child_mu_tasks")
     assert state is not None
     assert state.state == "1"  # only incomplete tasks
     assert len(state.attributes["tasks"]) == 2
@@ -362,7 +362,7 @@ async def test_mu_tasks_sensor_not_created_when_disabled(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_child_tasks")
+    state = hass.states.get("sensor.test_child_mu_tasks")
     assert state is None
 
 
