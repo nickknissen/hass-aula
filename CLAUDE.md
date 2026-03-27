@@ -17,7 +17,7 @@ prek run --all-files                  # run all pre-commit hooks manually
 
 ## Aula Package API Reference
 
-When trying to understand the `aula` PyPI package, consult **`docs/aula-package-api.md`** — it documents every public method, data model, enum, exception, and constant in `aula==1.2.0`.
+When trying to understand the `aula` PyPI package, consult **`docs/aula-package-api.md`** — it documents every public method, data model, enum, exception, and constant in `aula==1.3.0`.
 
 ## Architecture
 

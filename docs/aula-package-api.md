@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.2.0`
+> **Package:** `aula==1.3.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-03-16
+> **Last updated:** 2026-03-27
 
 ---
 
@@ -34,6 +34,7 @@ AulaApiClient(
     http_client: HttpClient,
     access_token: str | None = None,
     csrf_token: str | None = None,
+    on_token_refresh: Callable[[], Awaitable[str | None]] | None = None,
 ) -> None
 ```
 
@@ -43,6 +44,7 @@ AulaApiClient(
 |--------|-----------|-------------|
 | `init` | `async init() -> None` | Discover current API version and establish guardian role |
 | `is_logged_in` | `async is_logged_in() -> bool` | Check if session is still authenticated |
+| `keep_alive` | `async keep_alive() -> bool` | Extend backend session to prevent timeouts |
 | `close` | `async close() -> None` | Close the HTTP client |
 
 Supports `async with` context manager.
@@ -53,6 +55,7 @@ Supports `async with` context manager.
 |--------|-----------|-------------|
 | `get_profile` | `async get_profile() -> Profile` | Fetch authenticated user's profile with children |
 | `get_profile_context` | `async get_profile_context() -> dict[str, Any]` | Fetch profile context for current guardian session |
+| `get_profile_master_data` | `async get_profile_master_data(institution_profile_id: int) -> ProfileMasterData \| None` | Fetch extended profile master data (email, phone, address) |
 
 ### Widgets
 
@@ -73,12 +76,14 @@ Supports `async with` context manager.
 | `get_presence_states` | `async get_presence_states(institution_profile_ids: list[int] \| None = None) -> list[ChildPresenceState]` | Fetch current presence states for children |
 | `get_presence_configuration` | `async get_presence_configuration(child_ids: list[int]) -> list[PresenceConfiguration]` | Fetch presence configuration (pickup rules, etc.) by child IDs |
 | `get_activity_overview` | `async get_activity_overview(institution_profile_ids: list[int], week: int, year: int) -> PresenceWeekOverview \| None` | Fetch activity/week overview for presence (employee-only) |
+| `get_vacation_registrations` | `async get_vacation_registrations(institution_profile_ids: list[int]) -> list[VacationRegistration]` | Fetch vacation registrations for given institution profile IDs |
 
 ### Notifications
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `get_notifications_for_active_profile` | `async get_notifications_for_active_profile(*, children_ids: list[int] \| None = None, institution_codes: list[str] \| None = None, offset: int = 0, limit: int = 50, module: str \| None = None) -> list[Notification]` | Fetch notifications for active profile |
+| `get_notification_settings` | `async get_notification_settings() -> list[NotificationSetting]` | Fetch notification settings for active profile |
 
 ### Messaging
 
@@ -90,6 +95,7 @@ Supports `async with` context manager.
 | `get_common_inboxes` | `async get_common_inboxes(institution_profile_ids: list[int] \| None = None) -> list[dict]` | Fetch common inboxes |
 | `get_threads_in_bundle` | `async get_threads_in_bundle(bundle_id: int) -> list[MessageThread]` | Fetch threads in a bundle |
 | `get_message_info` | `async get_message_info(thread_id: str, message_id: str) -> dict \| None` | Fetch lightweight message info |
+| `get_auto_reply` | `async get_auto_reply() -> AutoReply \| None` | Fetch current auto-reply configuration |
 | `search_messages` | `async search_messages(institution_profile_ids: list[int], institution_codes: list[str], *, text: str = "", from_date: date \| None = None, to_date: date \| None = None, has_attachments: bool \| None = None, limit: int = 100) -> list[Message]` | Search messages with server-side filtering and automatic pagination |
 | `get_all_message_threads` | `async get_all_message_threads(cutoff_date: date) -> list[dict]` | Paginate threads until older than cutoff_date |
 | `get_all_messages_for_thread` | `async get_all_messages_for_thread(thread_id: str) -> list[dict]` | Paginate all messages for a thread |
@@ -116,6 +122,7 @@ Supports `async with` context manager.
 | `get_groups` | `async get_groups(institution_codes: list[str], child_institution_profile_ids: list[int]) -> list[Group]` | Fetch groups for given institution codes and child profile IDs |
 | `get_group` | `async get_group(group_id: int) -> Group \| None` | Fetch a single group by ID |
 | `get_group_members` | `async get_group_members(group_id: int, portal_roles: list[str] \| None = None) -> list[GroupMember]` | Fetch members of a group |
+| `search_groups` | `async search_groups(text: str, limit: int = 100) -> list[Group]` | Search for groups by name |
 
 ### Posts
 
@@ -124,6 +131,14 @@ Supports `async with` context manager.
 | `get_posts` | `async get_posts(institution_profile_ids: list[int], page: int = 1, limit: int = 10) -> list[Post]` | Fetch posts from Aula |
 | `get_post` | `async get_post(post_id: int) -> Post \| None` | Fetch a single post by ID |
 | `get_comments` | `async get_comments(parent_type: str, parent_id: int, limit: int = 100) -> list[Comment]` | Fetch comments for a given parent (e.g. post) |
+
+### Consent & Documents
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get_consent_responses` | `async get_consent_responses(institution_profile_ids: list[int]) -> list[ConsentResponse]` | Fetch consent responses for given institution profile IDs |
+| `get_secure_documents` | `async get_secure_documents(institution_profile_ids: list[int]) -> list[SecureDocument]` | Fetch secure documents shared with/by user |
+| `get_common_files` | `async get_common_files(institution_profile_ids: list[int]) -> list[SecureDocument]` | Fetch common institution files |
 
 ### Search
 
@@ -144,7 +159,7 @@ Supports `async with` context manager.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `get_gallery_albums` | `async get_gallery_albums(institution_profile_ids: list[int], limit: int = 1000) -> list[dict]` | Fetch gallery albums as raw dicts |
+| `get_gallery_albums` | `async get_gallery_albums(institution_profile_ids: list[int], limit: int = 1000, *, index: int = 0, sort_on: str = "createdAt", order_direction: str = "desc", filter_by: str = "all") -> list[dict]` | Fetch gallery albums as raw dicts |
 | `get_album_pictures` | `async get_album_pictures(institution_profile_ids: list[int], album_id: int, limit: int = 1000) -> list[dict]` | Fetch pictures for a specific album as raw dicts |
 | `get_media_by_id` | `async get_media_by_id(media_id: int) -> dict \| None` | Fetch a single media item by ID |
 | `get_media_by_profile` | `async get_media_by_profile(institution_profile_id: int, limit: int = 100) -> list[dict]` | Fetch media tagged with a profile |
@@ -229,6 +244,24 @@ class Child(AulaDataClass):
     name: str
     institution_name: str
     profile_picture: str
+```
+
+### ProfileMasterData
+
+```python
+@dataclass
+class ProfileMasterData(AulaDataClass):
+    institution_profile_id: int
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
+    phone_number: str = ""
+    mobile_phone: str = ""
+    address: str = ""
+    postal_code: str = ""
+    city: str = ""
+    municipality: str = ""
+    portal_role: str = ""
 ```
 
 ### DailyOverview
@@ -326,6 +359,17 @@ class MessageFolder(AulaDataClass):
     name: str
 ```
 
+### AutoReply
+
+```python
+@dataclass
+class AutoReply(AulaDataClass):
+    is_enabled: bool = False
+    message: str = ""
+    start_date: str | None = None
+    end_date: str | None = None
+```
+
 ### Notification
 
 ```python
@@ -344,6 +388,17 @@ class Notification(AulaDataClass):
     album_id: int | None = None
     media_id: int | None = None
     institution_profile_id: int | None = None
+```
+
+### NotificationSetting
+
+```python
+@dataclass
+class NotificationSetting(AulaDataClass):
+    module: str = ""
+    is_enabled: bool = False
+    push_enabled: bool = False
+    email_enabled: bool = False
 ```
 
 ### Post
@@ -387,6 +442,50 @@ class Comment(AulaDataClass):
     created_at: str = ""
     # Properties:
     # content: str          — plain text stripped from HTML
+```
+
+### ConsentResponse
+
+```python
+@dataclass
+class ConsentResponse(AulaDataClass):
+    id: int
+    consent_id: int
+    title: str = ""
+    description: str = ""
+    status: str = ""
+    responded_at: str | None = None
+    institution_code: str = ""
+```
+
+### SecureDocument
+
+```python
+@dataclass
+class SecureDocument(AulaDataClass):
+    id: int
+    title: str = ""
+    document_type: str = ""
+    description: str = ""
+    created_at: str | None = None
+    updated_at: str | None = None
+    owner_name: str = ""
+    institution_code: str = ""
+    is_read: bool = False
+```
+
+### VacationRegistration
+
+```python
+@dataclass
+class VacationRegistration(AulaDataClass):
+    id: int
+    child_name: str = ""
+    institution_profile_id: int = 0
+    start_date: str | None = None
+    end_date: str | None = None
+    status: str = ""
+    vacation_type: str = ""
 ```
 
 ### ProfileReference
@@ -784,6 +883,10 @@ class ChildPickupResponsibles(AulaDataClass):
 ```
 HttpRequestError                 — Base; any non-2xx response
 ├── AulaAuthenticationError      — 401/403
+│   ├── AulaSessionExpiredError  — Session expired (sub-code 13)
+│   ├── AulaStepUpRequiredError  — Elevated auth required (sub-code 8)
+│   ├── AulaUserDeactivatedError — User account deactivated (sub-code 7)
+│   └── AulaInvalidTokenError    — Invalid access token (sub-code 9)
 ├── AulaRateLimitError           — 429
 ├── AulaServerError              — 5xx
 ├── AulaNotFoundError            — 404
@@ -939,7 +1042,7 @@ async def authenticate(
 ) -> dict[str, Any]
 ```
 
-Handles cached tokens, refresh, and fresh MitID login. Returns token data dict.
+Handles cached tokens, refresh, and fresh MitID login. Returns token data dict. Applies a 60-second proactive expiry buffer (`_TOKEN_EXPIRY_BUFFER_SECS`) to prevent mid-request failures.
 
 #### create_client()
 
@@ -950,7 +1053,7 @@ async def create_client(
 ) -> AulaApiClient
 ```
 
-Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally.
+Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally. When a `refresh_token` is present in `token_data`, builds an `on_token_refresh` callback using `_refresh_token_via_oidc()` for automatic 401 retry.
 
 #### authenticate_and_create_client()
 
@@ -1135,15 +1238,26 @@ Additional models must be imported from `aula.models`:
 
 ```python
 from aula.models import (
-    Appointment, Comment, EasyIQHomework, Group, GroupMember,
+    Appointment, AutoReply, Comment, ConsentResponse,
+    EasyIQHomework, Group, GroupMember,
     LibraryLoan, LibraryStatus, MeebookStudentPlan,
-    MessageFolder, MomoUserCourses, UserReminders,
-    MUTask, MUWeeklyPerson, Notification, Post,
+    MessageFolder, MomoUserCourses, NotificationSetting,
+    UserReminders, MUTask, MUWeeklyPerson, Notification, Post,
+    ProfileMasterData, SecureDocument, VacationRegistration,
     ChildPickupResponsibles, PickupPerson,
     PresenceWeekTemplate, DayTemplate, SpareTimeActivity,
     PresenceRegistration, PresenceRegistrationDetail,
     ChildPresenceState, PresenceConfiguration,
     PresenceWeekOverview, PresenceDay, PresenceActivity,
+)
+```
+
+New exception subclasses (importable from `aula.http`):
+
+```python
+from aula.http import (
+    AulaSessionExpiredError, AulaStepUpRequiredError,
+    AulaUserDeactivatedError, AulaInvalidTokenError,
 )
 ```
 
