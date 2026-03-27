@@ -397,15 +397,8 @@ class AulaMUWeeklyNotesSensor(AulaEntity[AulaMUUgeplanCoordinator], SensorEntity
         return len(self._letters)
 
     @staticmethod
-    def _format_letters(letters: list[MUWeeklyLetter]) -> list[dict[str, Any]]:
-        return [
-            {
-                "group_name": letter.group_name,
-                "week_number": letter.week_number,
-                "content_html": letter.content_html,
-            }
-            for letter in letters[:MAX_ATTRIBUTE_ITEMS]
-        ]
+    def _format_letters(letters: list[MUWeeklyLetter]) -> list[str]:
+        return [letter.content_html for letter in letters[:MAX_ATTRIBUTE_ITEMS]]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

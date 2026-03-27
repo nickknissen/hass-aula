@@ -547,12 +547,9 @@ async def test_mu_weekly_notes_sensor(
     assert state is not None
     assert state.state == "2"
     assert len(state.attributes["notes"]) == 2
-    assert state.attributes["notes"][0]["group_name"] == "3A"
-    assert state.attributes["notes"][0]["week_number"] == 5
-    assert state.attributes["notes"][0]["content_html"] == "<p>Weekly update</p>"
+    assert state.attributes["notes"][0] == "<p>Weekly update</p>"
     assert len(state.attributes["next_week_notes"]) == 1
-    assert state.attributes["next_week_notes"][0]["group_name"] == "3A"
-    assert state.attributes["next_week_notes"][0]["week_number"] == 6
+    assert state.attributes["next_week_notes"][0] == "<p>Weekly update</p>"
 
 
 async def test_mu_weekly_notes_sensor_not_created_when_disabled(
