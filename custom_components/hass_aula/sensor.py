@@ -22,11 +22,12 @@ from .coordinator import (
     AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
+    _PresenceChildData,
 )
 from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
-    from aula import Child, DailyOverview, Profile
+    from aula import Child, Profile
     from aula.models.mu_weekly_letter import MUWeeklyLetter
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -151,26 +152,33 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
         self._attr_unique_id = f"{child.id}_presence_status"
 
     @property
-    def _overview(self) -> DailyOverview | None:
+    def _child_data(self) -> _PresenceChildData | None:
         return self.coordinator.data.get(self._child.id)
 
     @property
     def native_value(self) -> str | None:
         """Return the presence status."""
-        overview = self._overview
-        return overview.status.name.lower() if overview and overview.status else None
+        child_data = self._child_data
+        if not child_data or not child_data.overview:
+            return None
+        overview = child_data.overview
+        return overview.status.name.lower() if overview.status else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return time and location details as attributes."""
-        overview = self._overview
-        if not overview:
+        child_data = self._child_data
+        if not child_data or not child_data.overview:
             return {}
+        overview = child_data.overview
         return {
             "check_in_time": overview.check_in_time,
             "check_out_time": overview.check_out_time,
             "entry_time": overview.entry_time,
             "exit_time": overview.exit_time,
+            "exit_with": overview.exit_with,
+            "self_decider_start_time": child_data.self_decider_start,
+            "self_decider_end_time": child_data.self_decider_end,
             "location": overview.location,
         }
 

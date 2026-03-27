@@ -122,6 +122,7 @@ def mock_daily_overview(
     check_out_time: datetime | None = None,
     entry_time: datetime | None = None,
     exit_time: datetime | None = None,
+    exit_with: str | None = None,
     location: str | None = None,
 ) -> MagicMock:
     """Create a mock DailyOverview object."""
@@ -131,8 +132,41 @@ def mock_daily_overview(
     overview.check_out_time = check_out_time
     overview.entry_time = entry_time
     overview.exit_time = exit_time
+    overview.exit_with = exit_with
     overview.location = location
     return overview
+
+
+def mock_presence_templates(
+    child_id: int = 1,
+    by_date: str = "2024-01-15",
+    self_decider_start: str | None = None,
+    self_decider_end: str | None = None,
+) -> list[MagicMock]:
+    """Create a mock PresenceWeekTemplate list with spare time activity."""
+    from aula.models.presence_template import (
+        DayTemplate,
+        PresenceWeekTemplate,
+        SpareTimeActivity,
+    )
+
+    sta = None
+    if self_decider_start or self_decider_end:
+        sta = MagicMock(spec=SpareTimeActivity)
+        sta.start_time = self_decider_start
+        sta.end_time = self_decider_end
+
+    day = MagicMock(spec=DayTemplate)
+    day.by_date = by_date
+    day.spare_time_activity = sta
+
+    ip = MagicMock()
+    ip.id = child_id
+
+    tmpl = MagicMock(spec=PresenceWeekTemplate)
+    tmpl.institution_profile = ip
+    tmpl.day_templates = [day]
+    return [tmpl]
 
 
 def mock_calendar_event(
@@ -424,6 +458,7 @@ def mock_aula_client() -> Generator[AsyncMock]:
         client = AsyncMock()
         client.get_profile = AsyncMock(return_value=mock_profile())
         client.get_daily_overview = AsyncMock(return_value=mock_daily_overview())
+        client.get_presence_templates = AsyncMock(return_value=[])
         client.get_calendar_events = AsyncMock(return_value=[mock_calendar_event()])
         client.get_notifications_for_active_profile = AsyncMock(
             return_value=[mock_notification()]

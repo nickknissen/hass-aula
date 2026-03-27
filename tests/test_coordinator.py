@@ -75,6 +75,7 @@ async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
     client = AsyncMock()
     overview = mock_daily_overview()
     client.get_daily_overview = AsyncMock(return_value=overview)
+    client.get_presence_templates = AsyncMock(return_value=[])
 
     profile = mock_profile()
     tm = _create_token_manager()
@@ -86,7 +87,9 @@ async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
     data = await coordinator._async_update_data()
 
     assert 1 in data
-    assert data[1] is overview
+    assert data[1].overview is overview
+    assert data[1].self_decider_start is None
+    assert data[1].self_decider_end is None
     client.get_daily_overview.assert_called_once_with(1)
 
 
@@ -96,6 +99,7 @@ async def test_presence_coordinator_auth_error(hass: HomeAssistant) -> None:
     client.get_daily_overview = AsyncMock(
         side_effect=AulaAuthenticationError("Auth failed", 401)
     )
+    client.get_presence_templates = AsyncMock(return_value=[])
 
     profile = mock_profile()
     tm = _create_token_manager()
@@ -119,6 +123,7 @@ async def test_presence_coordinator_auth_error_refresh_succeeds(
     client.get_daily_overview = AsyncMock(
         side_effect=AulaAuthenticationError("Auth failed", 401)
     )
+    client.get_presence_templates = AsyncMock(return_value=[])
 
     profile = mock_profile()
     tm = _create_token_manager()
@@ -137,6 +142,7 @@ async def test_presence_coordinator_connection_error(hass: HomeAssistant) -> Non
     client.get_daily_overview = AsyncMock(
         side_effect=AulaConnectionError("Connection failed", 0)
     )
+    client.get_presence_templates = AsyncMock(return_value=[])
 
     profile = mock_profile()
     tm = _create_token_manager()

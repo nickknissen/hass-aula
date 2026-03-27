@@ -29,7 +29,8 @@ async def async_get_config_entry_diagnostics(
     ]
 
     presence_data: dict[str, Any] = {}
-    for child_id, overview in runtime_data.presence_coordinator.data.items():
+    for child_id, child_data in runtime_data.presence_coordinator.data.items():
+        overview = child_data.overview if child_data else None
         if overview is None:
             presence_data[str(child_id)] = None
         else:
@@ -75,9 +76,10 @@ async def async_get_config_entry_diagnostics(
         }
 
     if runtime_data.mu_ugeplan_coordinator and runtime_data.mu_ugeplan_coordinator.data:
+        ugeplan_data = runtime_data.mu_ugeplan_coordinator.data
         widgets["mu_ugeplan"] = {
             str(child_id): len(letters)
-            for child_id, letters in runtime_data.mu_ugeplan_coordinator.data.items()
+            for child_id, letters in ugeplan_data.current.items()
         }
 
     if runtime_data.easyiq_coordinator and runtime_data.easyiq_coordinator.data:

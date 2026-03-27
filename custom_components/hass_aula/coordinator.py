@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from aula import (
@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     from aula import AulaApiClient, Child, Profile
     from aula.models.mu_weekly_letter import MUWeeklyLetter
+    from aula.models.presence_template import PresenceWeekTemplate
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
@@ -96,8 +97,24 @@ def _get_child_institution_code(child: Child) -> str:
     return ""
 
 
+class _PresenceChildData:
+    """Presence data for a single child (overview + today's template)."""
+
+    __slots__ = ("overview", "self_decider_end", "self_decider_start")
+
+    def __init__(
+        self,
+        overview: DailyOverview | None,
+        self_decider_start: str | None = None,
+        self_decider_end: str | None = None,
+    ) -> None:
+        self.overview = overview
+        self.self_decider_start = self_decider_start
+        self.self_decider_end = self_decider_end
+
+
 class AulaPresenceCoordinator(
-    DataUpdateCoordinator[dict[int, DailyOverview | None]],
+    DataUpdateCoordinator[dict[int, _PresenceChildData]],
 ):
     """Coordinator for fetching presence data for all children."""
 
@@ -121,19 +138,55 @@ class AulaPresenceCoordinator(
         self.profile = profile
         self.token_manager = token_manager
 
-    async def _async_update_data(self) -> dict[int, DailyOverview | None]:
-        """Fetch presence data for all children."""
+    async def _async_update_data(self) -> dict[int, _PresenceChildData]:
+        """Fetch presence data and today's templates for all children."""
+        child_ids = [child.id for child in self.profile.children]
+        today = dt_util.now().date()
+
         async with _aula_api_errors(self.token_manager):
-            results = await asyncio.gather(
-                *(
-                    self.client.get_daily_overview(child.id)
-                    for child in self.profile.children
-                )
+            overview_results, templates = await asyncio.gather(
+                asyncio.gather(
+                    *(self.client.get_daily_overview(cid) for cid in child_ids)
+                ),
+                self.client.get_presence_templates(
+                    institution_profile_ids=child_ids,
+                    from_date=today,
+                    to_date=today,
+                ),
             )
-            return {
-                child.id: result
-                for child, result in zip(self.profile.children, results, strict=False)
-            }
+
+        self_decider_map = _extract_self_decider_times(templates, today)
+
+        return {
+            child.id: _PresenceChildData(
+                overview=overview,
+                self_decider_start=self_decider_map.get(child.id, (None, None))[0],
+                self_decider_end=self_decider_map.get(child.id, (None, None))[1],
+            )
+            for child, overview in zip(
+                self.profile.children, overview_results, strict=False
+            )
+        }
+
+
+def _extract_self_decider_times(
+    templates: list[PresenceWeekTemplate],
+    today: date,
+) -> dict[int, tuple[str | None, str | None]]:
+    """Extract self-decider start/end times from today's templates."""
+    result: dict[int, tuple[str | None, str | None]] = {}
+    today_iso = today.isoformat()
+    for week_tmpl in templates:
+        ip = week_tmpl.institution_profile
+        if not ip or ip.id is None:
+            continue
+        for day in week_tmpl.day_templates:
+            if day.by_date != today_iso:
+                continue
+            sta = day.spare_time_activity
+            if sta:
+                result[ip.id] = (sta.start_time, sta.end_time)
+    return result
 
 
 class AulaCalendarCoordinator(

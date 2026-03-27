@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 from aula.models.presence import PresenceState
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
@@ -30,6 +31,7 @@ from .conftest import (
     mock_mu_task,
     mock_mu_weekly_letter,
     mock_mu_weekly_person,
+    mock_presence_templates,
     mock_team_reminder,
     mock_user_reminders,
 )
@@ -92,8 +94,10 @@ async def test_presence_status_not_present(
 async def test_presence_sensor_attributes(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test that check-in/out times and location are exposed as attributes."""
+    freezer.move_to("2024-01-15 12:00:00+00:00")
     check_in = datetime(2024, 1, 15, 8, 30, tzinfo=UTC)
     check_out = datetime(2024, 1, 15, 15, 0, tzinfo=UTC)
     entry_time = datetime(2024, 1, 15, 8, 25, tzinfo=UTC)
@@ -103,9 +107,18 @@ async def test_presence_sensor_attributes(
         check_out_time=check_out,
         entry_time=entry_time,
         exit_time=exit_time,
+        exit_with="Parent",
         location="Room 1",
     )
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
+    mock_aula_client.get_presence_templates = AsyncMock(
+        return_value=mock_presence_templates(
+            child_id=1,
+            by_date="2024-01-15",
+            self_decider_start="14:00",
+            self_decider_end="16:30",
+        )
+    )
 
     entry = make_config_entry()
     entry.add_to_hass(hass)
@@ -118,6 +131,9 @@ async def test_presence_sensor_attributes(
     assert state.attributes["check_out_time"] == check_out
     assert state.attributes["entry_time"] == entry_time
     assert state.attributes["exit_time"] == exit_time
+    assert state.attributes["exit_with"] == "Parent"
+    assert state.attributes["self_decider_start_time"] == "14:00"
+    assert state.attributes["self_decider_end_time"] == "16:30"
     assert state.attributes["location"] == "Room 1"
 
 
