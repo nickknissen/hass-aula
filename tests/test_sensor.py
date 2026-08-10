@@ -10,6 +10,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
+    MAX_MESSAGE_ITEMS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ,
     WIDGET_HUSKELISTEN,
@@ -216,6 +217,123 @@ async def test_notifications_sensor_counts_all(
     state = hass.states.get("sensor.test_parent_unread_notifications")
     assert state is not None
     assert state.state == "3"
+
+
+async def test_latest_messages_sensor_state_and_attributes(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test latest messages sensor reports unread count and message details."""
+    from .conftest import mock_message, mock_message_thread
+
+    threads = [
+        mock_message_thread(thread_id="1", subject="Skolefest"),
+        mock_message_thread(thread_id="2", subject="Lejrskole"),
+    ]
+    mock_aula_client.get_message_threads = AsyncMock(
+        side_effect=lambda filter_on=None: (
+            threads[:1] if filter_on == "unread" else threads
+        )
+    )
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(content="Kære forældre", sender="Anne Jensen")]
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    # One of the two threads is unread.
+    assert state.state == "1"
+
+    messages = state.attributes["messages"]
+    assert len(messages) == 2
+    assert messages[0]["subject"] == "Skolefest"
+    assert messages[0]["sender"] == "Anne Jensen"
+    assert messages[0]["preview"] == "Kære forældre"
+    assert messages[0]["date"] == "2026-08-10T07:15:00+00:00"
+    assert messages[0]["unread"] is True
+    # Second thread is not in the unread list.
+    assert messages[1]["unread"] is False
+
+
+async def test_latest_messages_sensor_truncates_to_five(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test latest messages sensor caps the attribute list at MAX_MESSAGE_ITEMS."""
+    from .conftest import mock_message, mock_message_thread
+
+    threads = [
+        mock_message_thread(thread_id=str(i), subject=f"Thread {i}") for i in range(8)
+    ]
+    mock_aula_client.get_message_threads = AsyncMock(return_value=threads)
+    mock_aula_client.get_messages_for_thread = AsyncMock(return_value=[mock_message()])
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    # Unread count reflects every unread thread, not just the listed five.
+    assert state.state == "8"
+    assert len(state.attributes["messages"]) == MAX_MESSAGE_ITEMS
+
+
+async def test_latest_messages_sensor_empty_inbox(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test latest messages sensor with no threads."""
+    mock_aula_client.get_message_threads = AsyncMock(return_value=[])
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    assert state.state == "0"
+    assert "messages" not in state.attributes
+
+
+async def test_latest_messages_sensor_survives_thread_failure(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test one failing thread fetch does not fail the whole update."""
+    from .conftest import mock_message, mock_message_thread
+
+    threads = [
+        mock_message_thread(thread_id="1", subject="Skolefest"),
+        mock_message_thread(thread_id="2", subject="Lejrskole"),
+    ]
+    mock_aula_client.get_message_threads = AsyncMock(return_value=threads)
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        side_effect=[TimeoutError("boom"), [mock_message(content="Hej")]]
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    messages = state.attributes["messages"]
+    assert len(messages) == 2
+    # The failed thread still lists, falling back to thread-level metadata.
+    assert messages[0]["subject"] == "Skolefest"
+    assert messages[0]["preview"] == ""
+    assert messages[0]["sender"] is None
+    assert messages[0]["date"] == "2026-08-10T07:00:00+00:00"
+    assert messages[1]["preview"] == "Hej"
 
 
 async def test_child_notifications_per_child(

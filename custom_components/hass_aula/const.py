@@ -29,6 +29,7 @@ CONF_WIDGETS = "widgets"
 PRESENCE_POLL_INTERVAL = 300  # 5 minutes
 NOTIFICATIONS_POLL_INTERVAL = 300  # 5 minutes
 CALENDAR_POLL_INTERVAL = 3600  # 60 minutes
+MESSAGES_POLL_INTERVAL = 1800  # 30 minutes
 
 # Widget poll intervals (seconds)
 LIBRARY_POLL_INTERVAL = 3600  # 60 minutes
@@ -37,6 +38,10 @@ MU_UGEPLAN_POLL_INTERVAL = 1800  # 30 minutes
 EASYIQ_POLL_INTERVAL = 1800  # 30 minutes
 MEEBOOK_POLL_INTERVAL = 3600  # 60 minutes
 HUSKELISTEN_POLL_INTERVAL = 1800  # 30 minutes
+
+# Latest-messages sensor shaping
+MAX_MESSAGE_ITEMS = 5
+MAX_PREVIEW_CHARS = 200
 
 SUPPORTED_WIDGETS: frozenset[str] = frozenset(
     {

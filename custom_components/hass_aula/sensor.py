@@ -18,6 +18,7 @@ from .coordinator import (
     AulaHuskelistenCoordinator,
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
+    AulaMessagesCoordinator,
     AulaMUTasksCoordinator,
     AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
         EasyIQChildData,
         HuskelistenChildData,
         LibraryChildData,
+        MessagesData,
     )
 
 MAX_ATTRIBUTE_ITEMS = 20
@@ -75,6 +77,11 @@ async def async_setup_entry(
     entities.append(
         AulaNotificationsSensor(
             coordinator=runtime.notifications_coordinator, profile=profile
+        )
+    )
+    entities.append(
+        AulaLatestMessagesSensor(
+            coordinator=runtime.messages_coordinator, profile=profile
         )
     )
     entities.extend(
@@ -183,7 +190,9 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
         }
 
 
-class AulaNotificationsSensor(AulaAccountEntity, SensorEntity):
+class AulaNotificationsSensor(
+    AulaAccountEntity[AulaNotificationsCoordinator], SensorEntity
+):
     """Sensor showing unread notification count for the active profile."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -270,6 +279,56 @@ class AulaChildNotificationsSensor(
                     "created_at": n.created_at,
                 }
                 for n in child_notifs[:5]
+            ],
+        }
+
+
+class AulaLatestMessagesSensor(
+    AulaAccountEntity[AulaMessagesCoordinator], SensorEntity
+):
+    """Sensor showing unread message count and the latest messages."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_translation_key = "latest_messages"
+
+    def __init__(
+        self,
+        coordinator: AulaMessagesCoordinator,
+        profile: Profile,
+    ) -> None:
+        """Initialize the latest messages sensor."""
+        super().__init__(coordinator, profile)
+        self._attr_unique_id = f"{profile.profile_id}_latest_messages"
+
+    @property
+    def _messages_data(self) -> MessagesData | None:
+        """Return the coordinator's inbox data."""
+        return self.coordinator.data
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of unread message threads."""
+        data = self._messages_data
+        if not data:
+            return 0
+        return data.unread_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the latest messages."""
+        data = self._messages_data
+        if not data or not data.messages:
+            return {}
+        return {
+            "messages": [
+                {
+                    "subject": message.subject,
+                    "sender": message.sender,
+                    "date": message.date,
+                    "unread": message.unread,
+                    "preview": message.preview,
+                }
+                for message in data.messages
             ],
         }
 

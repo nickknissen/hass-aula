@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         AulaHuskelistenCoordinator,
         AulaLibraryCoordinator,
         AulaMeebookCoordinator,
+        AulaMessagesCoordinator,
         AulaMUTasksCoordinator,
         AulaMUUgeplanCoordinator,
         AulaNotificationsCoordinator,
@@ -65,6 +66,25 @@ class HuskelistenChildData:
 
 
 @dataclass
+class MessagePreview:
+    """A single message shown by the latest-messages sensor."""
+
+    subject: str
+    sender: str | None
+    date: str | None
+    unread: bool
+    preview: str
+
+
+@dataclass
+class MessagesData:
+    """Inbox data for the active profile."""
+
+    unread_count: int = 0
+    messages: list[MessagePreview] = field(default_factory=list)
+
+
+@dataclass
 class AulaRuntimeData:
     """Runtime data for the Aula integration."""
 
@@ -74,6 +94,7 @@ class AulaRuntimeData:
     presence_coordinator: AulaPresenceCoordinator
     calendar_coordinator: AulaCalendarCoordinator
     notifications_coordinator: AulaNotificationsCoordinator
+    messages_coordinator: AulaMessagesCoordinator
     library_coordinator: AulaLibraryCoordinator | None = None
     mu_tasks_coordinator: AulaMUTasksCoordinator | None = None
     mu_ugeplan_coordinator: AulaMUUgeplanCoordinator | None = None
@@ -88,6 +109,7 @@ class AulaRuntimeData:
             self.presence_coordinator,
             self.calendar_coordinator,
             self.notifications_coordinator,
+            self.messages_coordinator,
             self.library_coordinator,
             self.mu_tasks_coordinator,
             self.mu_ugeplan_coordinator,

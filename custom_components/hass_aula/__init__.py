@@ -38,6 +38,7 @@ from .coordinator import (
     AulaHuskelistenCoordinator,
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
+    AulaMessagesCoordinator,
     AulaMUTasksCoordinator,
     AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
@@ -239,6 +240,7 @@ async def async_setup_entry(
     notifications_coordinator = AulaNotificationsCoordinator(
         hass, client, token_manager
     )
+    messages_coordinator = AulaMessagesCoordinator(hass, client, token_manager)
 
     # Create widget coordinators if any widgets are enabled
     wc = _WidgetCoordinators()
@@ -253,6 +255,7 @@ async def async_setup_entry(
         presence_coordinator.async_config_entry_first_refresh(),
         calendar_coordinator.async_config_entry_first_refresh(),
         notifications_coordinator.async_config_entry_first_refresh(),
+        messages_coordinator.async_config_entry_first_refresh(),
     ]
     first_refreshes.extend(
         coord.async_config_entry_first_refresh()
@@ -276,6 +279,7 @@ async def async_setup_entry(
         presence_coordinator=presence_coordinator,
         calendar_coordinator=calendar_coordinator,
         notifications_coordinator=notifications_coordinator,
+        messages_coordinator=messages_coordinator,
         library_coordinator=wc.library,
         mu_tasks_coordinator=wc.mu_tasks,
         mu_ugeplan_coordinator=wc.mu_ugeplan,

@@ -62,6 +62,9 @@
       "unread_notifications": {
         "name": "Ulæste notifikationer"
       },
+      "latest_messages": {
+        "name": "Seneste beskeder"
+      },
       "child_unread_notifications": {
         "name": "Ulæste notifikationer"
       },

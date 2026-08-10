@@ -7,6 +7,9 @@
       "unread_notifications": {
         "default": "mdi:bell-badge"
       },
+      "latest_messages": {
+        "default": "mdi:message-text"
+      },
       "library_loans": {
         "default": "mdi:book-open-variant"
       },
