@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.3.0`
+> **Package:** `aula==1.3.2`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-03-27
+> **Last updated:** 2026-08-10
 
 ---
 
@@ -187,7 +187,7 @@ These delegate to `self.widgets.*` and will be removed in a future version:
 
 | Attribute | Type | Notes |
 |-----------|------|-------|
-| `api_url` | `str` | Base API URL with version (e.g. `https://api.aula.dk/api/v23`) |
+| `api_url` | `str` | Base API URL with version (e.g. `https://api.aula.dk/api/v24`) |
 | `widgets` | `AulaWidgetsClient` | Widget-specific API client |
 
 ---
@@ -917,7 +917,7 @@ MitIDAuthError                   — Base for MitID auth failures
 
 ```python
 API_URL = "https://www.aula.dk/api/v"
-API_VERSION = "23"
+API_VERSION = "24"
 MIN_UDDANNELSE_API = "https://api.minuddannelse.net/aula"
 SYSTEMATIC_API = "https://systematic-momo.dk/api/aula"
 EASYIQ_API = "https://api.easyiqcloud.dk/api/aula"
@@ -1213,7 +1213,7 @@ def output_json(ctx: click.Context, data: Any) -> bool:
 
 ### API Version Handling
 
-- Current default: `API_VERSION = "23"`
+- Current default: `API_VERSION = "24"`
 - `_request_with_version_retry()` automatically bumps the version on 410 Gone
 - `_set_correct_api_version()` discovers the correct version during `init()`
 
