@@ -49,6 +49,9 @@ async def async_get_config_entry_diagnostics(
     for child_id, events in runtime_data.calendar_coordinator.data.items():
         calendar_data[str(child_id)] = len(events)
 
+    # Counts only — message subjects, senders and previews must not leak here.
+    messages_data = runtime_data.messages_coordinator.data
+
     result: dict[str, Any] = {
         "profile": {
             "profile_id": runtime_data.profile.profile_id,
@@ -58,6 +61,10 @@ async def async_get_config_entry_diagnostics(
         },
         "presence": presence_data,
         "calendar_event_counts": calendar_data,
+        "messages": {
+            "unread_count": messages_data.unread_count if messages_data else 0,
+            "listed_count": len(messages_data.messages) if messages_data else 0,
+        },
     }
 
     # Widget data summaries

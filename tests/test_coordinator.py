@@ -15,12 +15,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from custom_components.hass_aula.const import MAX_PREVIEW_CHARS
 from custom_components.hass_aula.coordinator import (
     AulaCalendarCoordinator,
     AulaEasyIQCoordinator,
     AulaHuskelistenCoordinator,
     AulaLibraryCoordinator,
     AulaMeebookCoordinator,
+    AulaMessagesCoordinator,
     AulaMUTasksCoordinator,
     AulaMUUgeplanCoordinator,
     AulaPresenceCoordinator,
@@ -37,6 +39,8 @@ from .conftest import (
     mock_library_loan,
     mock_library_status,
     mock_meebook_student_plan,
+    mock_message,
+    mock_message_thread,
     mock_mu_task,
     mock_mu_weekly_letter,
     mock_mu_weekly_person,
@@ -670,6 +674,102 @@ async def test_mu_ugeplan_coordinator_connection_error(hass: HomeAssistant) -> N
     ctx = _create_widget_context()
     tm = _create_token_manager()
     coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_messages_coordinator_builds_previews(hass: HomeAssistant) -> None:
+    """Test messages coordinator shapes threads and messages into previews."""
+    client = AsyncMock()
+    threads = [
+        mock_message_thread(thread_id="1", subject="Skolefest"),
+        mock_message_thread(thread_id="2", subject="Lejrskole"),
+    ]
+    client.get_message_threads = AsyncMock(
+        side_effect=lambda filter_on=None: (
+            threads[:1] if filter_on == "unread" else threads
+        )
+    )
+    client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(content="Kære forældre", sender="Anne Jensen")]
+    )
+
+    coordinator = AulaMessagesCoordinator(hass, client, _create_token_manager())
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert data.unread_count == 1
+    assert len(data.messages) == 2
+    assert data.messages[0].subject == "Skolefest"
+    assert data.messages[0].sender == "Anne Jensen"
+    assert data.messages[0].preview == "Kære forældre"
+    assert data.messages[0].unread is True
+    assert data.messages[1].unread is False
+
+
+async def test_messages_coordinator_clips_preview(hass: HomeAssistant) -> None:
+    """Test messages coordinator clips long message bodies."""
+    client = AsyncMock()
+    client.get_message_threads = AsyncMock(return_value=[mock_message_thread()])
+    client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(content="x" * 500)]
+    )
+
+    coordinator = AulaMessagesCoordinator(hass, client, _create_token_manager())
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert len(data.messages[0].preview) == MAX_PREVIEW_CHARS
+
+
+async def test_messages_coordinator_skips_failed_thread(hass: HomeAssistant) -> None:
+    """Test a failing per-thread fetch does not fail the whole update."""
+    client = AsyncMock()
+    client.get_message_threads = AsyncMock(return_value=[mock_message_thread()])
+    client.get_messages_for_thread = AsyncMock(side_effect=TimeoutError("boom"))
+
+    coordinator = AulaMessagesCoordinator(hass, client, _create_token_manager())
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert len(data.messages) == 1
+    assert data.messages[0].preview == ""
+    assert data.messages[0].sender is None
+    # Falls back to the thread's own timestamp.
+    assert data.messages[0].date == "2026-08-10T07:00:00+00:00"
+
+
+async def test_messages_coordinator_auth_error(hass: HomeAssistant) -> None:
+    """Test messages coordinator raises ConfigEntryAuthFailed on auth error."""
+    client = AsyncMock()
+    client.get_message_threads = AsyncMock(
+        side_effect=AulaAuthenticationError("Auth failed", 401)
+    )
+
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaAuthenticationError("Refresh failed", 0)
+    )
+    coordinator = AulaMessagesCoordinator(hass, client, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_messages_coordinator_connection_error(hass: HomeAssistant) -> None:
+    """Test messages coordinator raises UpdateFailed on connection error."""
+    client = AsyncMock()
+    client.get_message_threads = AsyncMock(
+        side_effect=AulaConnectionError("Connection failed", 0)
+    )
+
+    coordinator = AulaMessagesCoordinator(hass, client, _create_token_manager())
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):

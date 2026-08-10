@@ -39,6 +39,7 @@ All extend `DataUpdateCoordinator`. Error handling centralized in `_aula_api_err
 |---|---|
 | `AulaPresenceCoordinator` | 5 min |
 | `AulaNotificationsCoordinator` | 5 min |
+| `AulaMessagesCoordinator` | 30 min |
 | `AulaCalendarCoordinator` | 60 min |
 | `AulaLibraryCoordinator` | 60 min |
 | `AulaMeebookCoordinator` | 60 min |

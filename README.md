@@ -105,6 +105,7 @@ The following entities are created **per child**:
 | Entity | Description |
 |--------|-------------|
 | `sensor.<profile>_unread_notifications` | Number of unread Aula notifications |
+| `sensor.<profile>_latest_messages` | Number of unread message threads |
 
 **Unread notifications sensor attributes:**
 
@@ -112,6 +113,15 @@ The following entities are created **per child**:
 |-----------|-------------|
 | `total` | Total number of notifications |
 | `recent` | List of the 5 most recent notification titles |
+
+**Latest messages sensor attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `messages` | The 5 most recent message threads |
+
+Each entry in `messages` carries `subject`, `sender`, `date`, `unread` and a
+`preview` of the newest message in that thread (clipped to 200 characters).
 
 ### Calendar
 

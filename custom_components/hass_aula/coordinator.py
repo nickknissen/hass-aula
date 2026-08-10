@@ -15,7 +15,7 @@ from aula import (
     CalendarEvent,
     DailyOverview,
 )
-from aula.models import MUTask, MUWeeklyPerson, Notification
+from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
 from aula.models.meebook_weekplan import MeebookTask
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -29,7 +29,10 @@ from .const import (
     HUSKELISTEN_POLL_INTERVAL,
     LIBRARY_POLL_INTERVAL,
     LOGGER,
+    MAX_MESSAGE_ITEMS,
+    MAX_PREVIEW_CHARS,
     MEEBOOK_POLL_INTERVAL,
+    MESSAGES_POLL_INTERVAL,
     MU_TASKS_POLL_INTERVAL,
     MU_UGEPLAN_POLL_INTERVAL,
     NOTIFICATIONS_POLL_INTERVAL,
@@ -39,7 +42,14 @@ from .const import (
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
-from .data import EasyIQChildData, HuskelistenChildData, LibraryChildData, WidgetContext
+from .data import (
+    EasyIQChildData,
+    HuskelistenChildData,
+    LibraryChildData,
+    MessagePreview,
+    MessagesData,
+    WidgetContext,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -289,6 +299,89 @@ class AulaNotificationsCoordinator(
             self._known_ids = new_ids
 
         return notifications
+
+
+def _message_preview(
+    thread: MessageThread,
+    messages: list[Message] | BaseException,
+    unread_ids: set[str],
+) -> MessagePreview:
+    """Shape a thread and its newest message into a MessagePreview."""
+    # TODO(aula-package): MessageThread/Message expose neither sender nor  # noqa: TD003, FIX002, E501
+    # timestamp as public fields. Add them to the aula package, then replace
+    # these _raw accesses.
+    thread_raw = thread._raw or {}  # noqa: SLF001
+    sender: str | None = None
+    sent_at: str | None = None
+    preview = ""
+
+    if isinstance(messages, BaseException):
+        LOGGER.warning(
+            "Could not fetch messages for thread %s: %s", thread.thread_id, messages
+        )
+    elif messages:
+        message = messages[0]
+        message_raw = message._raw or {}  # noqa: SLF001
+        sender = message_raw.get("sender", {}).get("fullName")
+        sent_at = message_raw.get("sendDateTime")
+        preview = message.content[:MAX_PREVIEW_CHARS]
+
+    return MessagePreview(
+        subject=thread.subject,
+        sender=sender,
+        date=sent_at or thread_raw.get("lastUpdatedDate"),
+        unread=thread.thread_id in unread_ids,
+        preview=preview,
+    )
+
+
+class AulaMessagesCoordinator(
+    DataUpdateCoordinator[MessagesData],
+):
+    """Coordinator for fetching the latest message threads for the active profile."""
+
+    config_entry: AulaConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: AulaApiClient,
+        token_manager: AulaTokenManager,
+    ) -> None:
+        """Initialize the messages coordinator."""
+        super().__init__(
+            hass,
+            logger=LOGGER,
+            name="Aula Messages",
+            update_interval=timedelta(seconds=MESSAGES_POLL_INTERVAL),
+        )
+        self.client = client
+        self.token_manager = token_manager
+
+    async def _async_update_data(self) -> MessagesData:
+        """Fetch the latest threads plus the newest message in each."""
+        async with _aula_api_errors(self.token_manager):
+            threads = await self.client.get_message_threads()
+            unread_threads = await self.client.get_message_threads(filter_on="unread")
+            latest = threads[:MAX_MESSAGE_ITEMS]
+            # A single unreadable thread must not fail the whole update. An auth
+            # problem would already have surfaced on the two calls above.
+            thread_messages = await asyncio.gather(
+                *(
+                    self.client.get_messages_for_thread(thread.thread_id, limit=1)
+                    for thread in latest
+                ),
+                return_exceptions=True,
+            )
+
+        unread_ids = {thread.thread_id for thread in unread_threads}
+        return MessagesData(
+            unread_count=len(unread_threads),
+            messages=[
+                _message_preview(thread, messages, unread_ids)
+                for thread, messages in zip(latest, thread_messages, strict=True)
+            ],
+        )
 
 
 class _AulaWidgetCoordinator[T](DataUpdateCoordinator[T]):

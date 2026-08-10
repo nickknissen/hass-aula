@@ -13,6 +13,8 @@ from aula.models import Appointment, EasyIQHomework, LibraryLoan, MUTask
 from aula.models.child import Child
 from aula.models.library import LibraryStatus
 from aula.models.meebook_weekplan import MeebookDayPlan, MeebookStudentPlan, MeebookTask
+from aula.models.message import Message
+from aula.models.message_thread import MessageThread
 from aula.models.momo_huskeliste import AssignmentReminder, TeamReminder, UserReminders
 from aula.models.mu_task import MUTaskClass
 from aula.models.mu_weekly_letter import (
@@ -213,6 +215,44 @@ def mock_notification(
     notification.created_at = created_at
     notification.institution_profile_id = institution_profile_id
     return notification
+
+
+def mock_message_thread(
+    thread_id: str = "1",
+    subject: str = "Skolefest",
+    participants: list[str] | None = None,
+    last_updated: str | None = "2026-08-10T07:00:00+00:00",
+) -> MagicMock:
+    """Create a mock MessageThread object."""
+    thread = MagicMock(spec=MessageThread)
+    thread.thread_id = thread_id
+    thread.subject = subject
+    thread._raw = {
+        "id": thread_id,
+        "subject": subject,
+        "participants": [{"name": n} for n in (participants or ["Anne Jensen"])],
+        "lastUpdatedDate": last_updated,
+    }
+    return thread
+
+
+def mock_message(
+    message_id: str = "1",
+    content: str = "Kære forældre, på fredag holder vi skolefest.",
+    sender: str | None = "Anne Jensen",
+    send_date: str | None = "2026-08-10T07:15:00+00:00",
+) -> MagicMock:
+    """Create a mock Message object."""
+    message = MagicMock(spec=Message)
+    message.id = message_id
+    message.content_html = f"<p>{content}</p>"
+    message.content = content
+    message._raw = {
+        "id": message_id,
+        "sender": {"fullName": sender} if sender else {},
+        "sendDateTime": send_date,
+    }
+    return message
 
 
 def mock_library_loan(
@@ -463,6 +503,8 @@ def mock_aula_client() -> Generator[AsyncMock]:
         client.get_notifications_for_active_profile = AsyncMock(
             return_value=[mock_notification()]
         )
+        client.get_message_threads = AsyncMock(return_value=[mock_message_thread()])
+        client.get_messages_for_thread = AsyncMock(return_value=[mock_message()])
         client.is_logged_in = AsyncMock(return_value=True)
         client.close = AsyncMock()
         _setup_widget_mocks(client)

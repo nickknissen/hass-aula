@@ -11,7 +11,6 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import DOMAIN
-from .coordinator import AulaNotificationsCoordinator
 
 if TYPE_CHECKING:
     from aula import Child, Profile
@@ -41,14 +40,16 @@ class AulaEntity[CoordT: DataUpdateCoordinator[Any]](
         )
 
 
-class AulaAccountEntity(CoordinatorEntity[AulaNotificationsCoordinator]):
+class AulaAccountEntity[CoordT: DataUpdateCoordinator[Any]](
+    CoordinatorEntity[CoordT],
+):
     """Base class for profile-level Aula entities."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: AulaNotificationsCoordinator,
+        coordinator: CoordT,
         profile: Profile,
     ) -> None:
         """Initialize the account entity."""
