@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Release script: sets version, generates changelog via Claude (haiku), tags and creates GitHub release."""
+"""Release script: sets version, generates changelog via Claude (haiku), tags and creates GitHub release.
+
+This is the only thing that creates releases. There is deliberately no
+tag-triggered release workflow: two creators raced for the same tag, and the
+curated changelog below only survived because it happened to win.
+"""
 
 import argparse
 import json
@@ -22,6 +27,38 @@ def run(cmd: list[str], capture: bool = False) -> subprocess.CompletedProcess:
 
 def get_current_version() -> str:
     return json.loads(MANIFEST.read_text())["version"]
+
+
+def check_version_is_free(version: str) -> None:
+    """Fail before anything is mutated if the tag or release already exists.
+
+    This script is the only thing that creates releases, so a collision means a
+    previous run got part-way through rather than a race with CI.
+    """
+    tag = f"v{version}"
+
+    local = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+        capture_output=True, text=True
+    )
+    if local.returncode == 0:
+        print(f"Tag {tag} already exists locally.", file=sys.stderr)
+        sys.exit(1)
+
+    remote = run(["git", "ls-remote", "--tags", "origin", tag], capture=True)
+    if remote.stdout.strip():
+        print(f"Tag {tag} already exists on origin.", file=sys.stderr)
+        sys.exit(1)
+
+    release = subprocess.run(
+        ["gh", "release", "view", tag], capture_output=True, text=True
+    )
+    if release.returncode == 0:
+        print(
+            f"Release {tag} already exists. Use 'gh release edit {tag}' to change it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def set_version(new_version: str) -> None:
@@ -73,7 +110,17 @@ def generate_changelog(commits: str, new_version: str) -> str:
     if result.returncode != 0:
         print("Claude error:", result.stderr, file=sys.stderr)
         sys.exit(1)
-    return result.stdout.strip()
+    return strip_code_fence(result.stdout.strip())
+
+
+def strip_code_fence(text: str) -> str:
+    """Drop a wrapping ``` fence, which the model adds intermittently."""
+    lines = text.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def commit_manifest(version: str) -> None:
@@ -96,10 +143,13 @@ def push(version: str) -> None:
 
 def create_github_release(version: str, changelog: str) -> None:
     print("Creating GitHub release...")
+    # --notes is prepended to --generate-notes output, so the curated changelog
+    # keeps GitHub's compare link and contributor list underneath it.
     run([
         "gh", "release", "create", f"v{version}",
         "--title", f"Release v{version}",
         "--notes", changelog,
+        "--generate-notes",
     ])
     print(f"GitHub release v{version} created.")
 
@@ -122,6 +172,9 @@ def main() -> None:
         if status.stdout.strip():
             print("Working tree is not clean. Commit or stash changes first.", file=sys.stderr)
             sys.exit(1)
+
+    if not args.dry_run:
+        check_version_is_free(version)
 
     current = get_current_version()
     print(f"Current version: {current} -> {version}")
