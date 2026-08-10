@@ -116,6 +116,82 @@
     },
     "connection_failed": {
       "message": "Unable to connect to Aula. Please try again later."
+    },
+    "action_failed": {
+      "message": "Aula rejected the request: {error}"
+    },
+    "entry_not_loaded": {
+      "message": "The Aula account \"{target}\" is not loaded. Reload the integration and try again."
+    },
+    "exit_with_required": {
+      "message": "The activity type \"{activity_type}\" requires exit_with to name the person collecting the child."
+    },
+    "invalid_target": {
+      "message": "\"{target}\" is not an Aula child. Target the device for the child you want to update."
+    },
+    "invalid_time_range": {
+      "message": "The entry time ({entry_time}) must be before the exit time ({exit_time})."
+    },
+    "no_target": {
+      "message": "No Aula child was targeted. Select at least one child device."
+    }
+  },
+  "services": {
+    "update_presence": {
+      "name": "Update presence",
+      "description": "Sets the planned drop-off and pick-up times for one or more children.",
+      "fields": {
+        "entry_time": {
+          "name": "Entry time",
+          "description": "Time the child is dropped off."
+        },
+        "exit_time": {
+          "name": "Exit time",
+          "description": "Time the child is collected or allowed to leave."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Day to update. Defaults to today."
+        },
+        "activity_type": {
+          "name": "Activity type",
+          "description": "How the child leaves at the end of the day."
+        },
+        "exit_with": {
+          "name": "Collected by",
+          "description": "Name of the person collecting the child, including the relation in parentheses as Aula shows it, for example \"Nick Nissen (Far)\". Required for \"Collected by\" and \"Goes home with\"."
+        },
+        "comment": {
+          "name": "Comment",
+          "description": "Optional note for the staff."
+        },
+        "repeat": {
+          "name": "Repeat",
+          "description": "Whether the times repeat on the same weekday."
+        },
+        "expires_at": {
+          "name": "Expires at",
+          "description": "When a repeating entry stops. Defaults to the end of the school year."
+        }
+      }
+    }
+  },
+  "selector": {
+    "activity_type": {
+      "options": {
+        "picked_up_by": "Collected by",
+        "self_decider": "Allowed to leave alone",
+        "send_home": "Sent home",
+        "go_home_with": "Goes home with",
+        "drop_off_time": "Drop-off time only"
+      }
+    },
+    "repeat": {
+      "options": {
+        "never": "Never",
+        "weekly": "Every week",
+        "every_2_weeks": "Every two weeks"
+      }
     }
   }
 }

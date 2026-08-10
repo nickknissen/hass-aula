@@ -116,6 +116,82 @@
     },
     "connection_failed": {
       "message": "Kan ikke oprette forbindelse til Aula. Prøv venligst igen senere."
+    },
+    "action_failed": {
+      "message": "Aula afviste anmodningen: {error}"
+    },
+    "entry_not_loaded": {
+      "message": "Aula-kontoen \"{target}\" er ikke indlæst. Genindlæs integrationen og prøv igen."
+    },
+    "exit_with_required": {
+      "message": "Aktivitetstypen \"{activity_type}\" kræver, at exit_with angiver, hvem der henter barnet."
+    },
+    "invalid_target": {
+      "message": "\"{target}\" er ikke et Aula-barn. Vælg enheden for det barn, du vil opdatere."
+    },
+    "invalid_time_range": {
+      "message": "Afleveringstiden ({entry_time}) skal ligge før hentetiden ({exit_time})."
+    },
+    "no_target": {
+      "message": "Der blev ikke valgt noget Aula-barn. Vælg mindst én barne-enhed."
+    }
+  },
+  "services": {
+    "update_presence": {
+      "name": "Opdater fremmøde",
+      "description": "Angiver de planlagte afleverings- og hentetider for et eller flere børn.",
+      "fields": {
+        "entry_time": {
+          "name": "Afleveringstid",
+          "description": "Tidspunkt hvor barnet bliver afleveret."
+        },
+        "exit_time": {
+          "name": "Hentetid",
+          "description": "Tidspunkt hvor barnet bliver hentet eller må gå."
+        },
+        "date": {
+          "name": "Dato",
+          "description": "Dagen der skal opdateres. Standard er i dag."
+        },
+        "activity_type": {
+          "name": "Aktivitetstype",
+          "description": "Hvordan barnet forlader institutionen."
+        },
+        "exit_with": {
+          "name": "Hentes af",
+          "description": "Navnet på den, der henter barnet, inklusive relationen i parentes som i Aula, f.eks. \"Nick Nissen (Far)\". Kræves ved \"Hentes af\" og \"Går hjem med\"."
+        },
+        "comment": {
+          "name": "Bemærkning",
+          "description": "Valgfri bemærkning til personalet."
+        },
+        "repeat": {
+          "name": "Gentag",
+          "description": "Om tiderne gentages på samme ugedag."
+        },
+        "expires_at": {
+          "name": "Udløber",
+          "description": "Hvornår en gentagelse stopper. Standard er skoleårets afslutning."
+        }
+      }
+    }
+  },
+  "selector": {
+    "activity_type": {
+      "options": {
+        "picked_up_by": "Hentes af",
+        "self_decider": "Selvbestemmer",
+        "send_home": "Sendes hjem",
+        "go_home_with": "Går hjem med",
+        "drop_off_time": "Kun afleveringstid"
+      }
+    },
+    "repeat": {
+      "options": {
+        "never": "Aldrig",
+        "weekly": "Hver uge",
+        "every_2_weeks": "Hver anden uge"
+      }
     }
   }
 }

@@ -15,6 +15,7 @@ from aula import (
 )
 from aula.http_httpx import HttpxHttpClient
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
@@ -47,13 +48,17 @@ from .coordinator import (
     _get_child_widget_id,
 )
 from .data import AulaRuntimeData, WidgetContext
+from .services import async_setup_services
 from .token_manager import AulaTokenManager
 
 if TYPE_CHECKING:
     from aula import AulaApiClient, Profile
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import ConfigType
 
     from .data import AulaConfigEntry
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # All widget/feature IDs that require building a widget context.
 _ALL_WIDGET_IDS = (
@@ -180,6 +185,17 @@ def _create_widget_coordinators(  # noqa: PLR0913
         )
 
     return wc
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """
+    Register the integration's actions.
+
+    Actions are registered here rather than in async_setup_entry so they stay
+    available when no entry is loaded, and can report that as a user error.
+    """
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(

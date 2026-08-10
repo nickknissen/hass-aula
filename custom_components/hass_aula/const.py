@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from logging import Logger, getLogger
 
+from aula import ActivityType
 from aula.const import (
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ,
@@ -25,6 +26,38 @@ EVENT_NOTIFICATION = "hass_aula_notification"
 CONF_MITID_USERNAME = "mitid_username"
 CONF_TOKEN_DATA = "token_data"  # noqa: S105
 CONF_WIDGETS = "widgets"
+
+SERVICE_UPDATE_PRESENCE = "update_presence"
+
+ATTR_ACTIVITY_TYPE = "activity_type"
+ATTR_COMMENT = "comment"
+ATTR_DATE = "date"
+ATTR_ENTRY_TIME = "entry_time"
+ATTR_EXIT_TIME = "exit_time"
+ATTR_EXIT_WITH = "exit_with"
+ATTR_EXPIRES_AT = "expires_at"
+ATTR_REPEAT = "repeat"
+
+ACTIVITY_TYPE_PICKED_UP_BY = "picked_up_by"
+
+# Maps the action's option slugs to the aula package's ActivityType members.
+# Whether a type needs exit_with comes from ActivityType.requires_exit_with.
+ACTIVITY_TYPES: dict[str, ActivityType] = {
+    ACTIVITY_TYPE_PICKED_UP_BY: ActivityType.PICKED_UP_BY,
+    "self_decider": ActivityType.SELF_DECIDER,
+    "send_home": ActivityType.SEND_HOME,
+    "go_home_with": ActivityType.GO_HOME_WITH,
+    "drop_off_time": ActivityType.DROP_OFF_TIME,
+}
+
+REPEAT_NEVER = "never"
+
+# Maps the action's snake_case options to the aula package's repeat_pattern values.
+REPEAT_PATTERNS: dict[str, str] = {
+    REPEAT_NEVER: "Never",
+    "weekly": "Weekly",
+    "every_2_weeks": "Every2Weeks",
+}
 
 PRESENCE_POLL_INTERVAL = 300  # 5 minutes
 NOTIFICATIONS_POLL_INTERVAL = 300  # 5 minutes
