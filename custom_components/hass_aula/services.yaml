@@ -1,0 +1,61 @@
+update_presence:
+  # Only an entity filter: hassfest rejects device filters on target. The target
+  # picker still offers the child devices, since they own matching sensors.
+  target:
+    entity:
+      integration: hass_aula
+      domain: sensor
+  fields:
+    entry_time:
+      required: true
+      example: "08:00"
+      selector:
+        time:
+    exit_time:
+      required: true
+      example: "15:30"
+      selector:
+        time:
+    date:
+      required: false
+      example: "2026-08-11"
+      selector:
+        date:
+    activity_type:
+      required: false
+      default: picked_up_by
+      selector:
+        select:
+          translation_key: activity_type
+          options:
+            - picked_up_by
+            - self_decider
+            - send_home
+            - go_home_with
+            - drop_off_time
+    exit_with:
+      required: false
+      example: "Nick Nissen (Far)"
+      selector:
+        text:
+    comment:
+      required: false
+      example: "Går til fodbold bagefter"
+      selector:
+        text:
+          multiline: true
+    repeat:
+      required: false
+      default: never
+      selector:
+        select:
+          translation_key: repeat
+          options:
+            - never
+            - weekly
+            - every_2_weeks
+    expires_at:
+      required: false
+      advanced: true
+      selector:
+        datetime:

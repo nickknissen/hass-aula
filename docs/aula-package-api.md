@@ -1,6 +1,6 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.3.2`
+> **Package:** `aula==1.4.0`
 > **Source:** `../aula` (relative to this repo)
 > **Last updated:** 2026-08-10
 
@@ -873,6 +873,26 @@ class ChildPickupResponsibles(AulaDataClass):
 
 **Properties:** `display_name: str`, `danish_name: str`
 **Class method:** `get_display_name(value: int) -> str`
+
+### ActivityType
+
+**Module:** `aula.models.presence` (also exported from `aula`)
+
+How a child leaves at the end of the day. Accepted by `update_presence_template`.
+
+| Value | Int | English | Danish |
+|-------|-----|---------|--------|
+| `PICKED_UP_BY` | 0 | Collected By | Hentes af |
+| `SELF_DECIDER` | 1 | Self Decider | Selvbestemmer |
+| `SEND_HOME` | 2 | Sent Home | Sendes hjem |
+| `GO_HOME_WITH` | 3 | Goes Home With | Går hjem med |
+| `DROP_OFF_TIME` | 4 | Drop-off Time | Afleveringstid |
+
+**Properties:** `display_name: str`, `danish_name: str`, `requires_exit_with: bool`
+**Class method:** `get_display_name(value: int) -> str`
+
+`requires_exit_with` is `True` for `PICKED_UP_BY` and `GO_HOME_WITH`; both need a
+name in `exit_with`, including the relation as Aula shows it (`"Nick Nissen (Far)"`).
 
 ---
 

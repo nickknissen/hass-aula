@@ -37,5 +37,10 @@
         "default": "mdi:calendar-school"
       }
     }
+  },
+  "services": {
+    "update_presence": {
+      "service": "mdi:clock-edit-outline"
+    }
   }
 }

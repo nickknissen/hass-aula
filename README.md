@@ -16,6 +16,7 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 - **Presence tracking** — Know whether your child is present, sick, absent, on a field trip, or checked out, with check-in/out times, entry/exit times, and location as attributes
 - **School calendar** — Upcoming events including teacher, substitute, and location info
 - **Notifications** — Fires a Home Assistant event for each new Aula notification, enabling automations to push alerts to your phone
+- **Set pick-up times** — The `hass_aula.update_presence` action writes planned drop-off/pick-up times back to Aula for one or more children at once
 - **Multi-child support** — Each child gets their own device with a full set of entities
 - **Automatic re-authentication** — Prompts for re-login when your session expires
 
@@ -128,6 +129,65 @@ Each entry in `messages` carries `subject`, `sender`, `date`, `unread` and a
 | Entity | Description |
 |--------|-------------|
 | `calendar.<child>_school` | Upcoming school events including teacher, substitute, and location |
+
+---
+
+## Actions
+
+### `hass_aula.update_presence`
+
+Sets the planned drop-off and pick-up times for one or more children — the same thing you would otherwise do by hand under **Komme/gå** in Aula.
+
+Target one or more **child devices** (or any entity belonging to them). Every targeted child gets the same times, so a single call can cover all your children.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `entry_time` | yes | Time the child is dropped off, e.g. `08:00` |
+| `exit_time` | yes | Time the child is collected or allowed to leave, e.g. `15:30` |
+| `date` | no | Day to update. Defaults to today |
+| `activity_type` | no | `picked_up_by` (default), `self_decider`, `send_home`, `go_home_with`, `drop_off_time` |
+| `exit_with` | conditional | Who collects the child. **Required** for `picked_up_by` and `go_home_with`. Include the relation exactly as Aula shows it, e.g. `"Nick Nissen (Far)"` |
+| `comment` | no | Note for the staff |
+| `repeat` | no | `never` (default), `weekly`, `every_2_weeks` |
+| `expires_at` | no | When a repeating entry stops. Defaults to the end of the school year |
+
+If a template already exists for that date it is **updated**, not duplicated. The presence sensors refresh automatically once the change is accepted.
+
+```yaml
+action: hass_aula.update_presence
+target:
+  device_id:
+    - abc123def456  # Emilie
+    - 789ghi012jkl  # Karla
+data:
+  entry_time: "08:00"
+  exit_time: "15:30"
+  activity_type: picked_up_by
+  exit_with: "Nick Nissen (Far)"
+  comment: "Går til fodbold bagefter"
+```
+
+**Leave work early on Fridays:**
+
+```yaml
+automation:
+  - alias: "Early Friday pickup"
+    triggers:
+      - trigger: time
+        at: "06:00:00"
+    conditions:
+      - condition: time
+        weekday:
+          - fri
+    actions:
+      - action: hass_aula.update_presence
+        target:
+          device_id: abc123def456
+        data:
+          entry_time: "08:00"
+          exit_time: "13:00"
+          exit_with: "Nick Nissen (Far)"
+```
 
 ---
 
