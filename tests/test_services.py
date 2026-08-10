@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import voluptuous as vol
 import yaml
 from aula import ActivityType, AulaAuthenticationError, AulaConnectionError
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
@@ -17,9 +18,13 @@ from homeassistant.helpers.service import async_get_all_descriptions
 from homeassistant.util import dt as dt_util
 
 from custom_components.hass_aula import services
-from custom_components.hass_aula.const import DOMAIN, SERVICE_UPDATE_PRESENCE
+from custom_components.hass_aula.const import (
+    DOMAIN,
+    SERVICE_GET_THREAD_MESSAGES,
+    SERVICE_UPDATE_PRESENCE,
+)
 
-from .conftest import make_config_entry, mock_child, mock_profile
+from .conftest import make_config_entry, mock_child, mock_message, mock_profile
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -91,12 +96,21 @@ async def test_service_description_loads(
     assert "target" in description
 
 
-def test_services_yaml_target_has_no_device_filter() -> None:
-    """Hassfest rejects device filters on target; catch that before CI does."""
+def test_services_yaml_matches_hassfest_rules() -> None:
+    """
+    Mirror the hassfest rules that services.yaml keeps tripping over.
+
+    Custom integrations may only use these top-level keys, and a device filter
+    on target is rejected outright. Both fail in CI otherwise.
+    """
+    allowed = {"fields", "target", "name", "description"}
     path = Path(services.__file__).parent / "services.yaml"
     definitions = yaml.safe_load(path.read_text(encoding="utf-8"))
 
     for name, definition in definitions.items():
+        extra = set(definition) - allowed
+        assert not extra, f"{name}: hassfest rejects top-level key(s) {sorted(extra)}"
+
         target = definition.get("target")
         if target is not None:
             assert "device" not in target, (
@@ -446,4 +460,213 @@ async def test_connection_error_raises(
             entry_time="08:00:00",
             exit_time="15:30:00",
             exit_with="Far",
+        )
+
+
+async def test_get_thread_messages_returns_full_content(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """The action returns plain and markdown content for each message."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(message_id="9", content="Kære forældre")]
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    mock_aula_client.get_messages_for_thread.assert_awaited_once_with("42", limit=5)
+    assert response == {
+        "thread_id": "42",
+        "messages": [
+            {
+                "id": "9",
+                "content": "Kære forældre",
+                "content_markdown": "Kære forældre",
+            }
+        ],
+    }
+
+
+async def test_get_thread_messages_honours_limit(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An explicit limit is passed through to the client."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(return_value=[])
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42", "limit": 25},
+        blocking=True,
+        return_response=True,
+    )
+
+    mock_aula_client.get_messages_for_thread.assert_awaited_once_with("42", limit=25)
+
+
+@pytest.mark.parametrize("limit", [0, 51])
+async def test_get_thread_messages_rejects_out_of_range_limit(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    limit: int,
+) -> None:
+    """A limit outside 1-50 is rejected by the schema."""
+    await _setup_integration(hass, mock_aula_client)
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "42", "limit": limit},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_get_thread_messages_does_not_fetch_thread_list(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Reading a thread costs one request, not a thread-list lookup as well."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(return_value=[])
+    before = mock_aula_client.get_message_threads.await_count
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert mock_aula_client.get_message_threads.await_count == before
+
+
+async def test_get_thread_messages_explicit_config_entry(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An explicit config_entry_id selects the account."""
+    entry = await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(return_value=[])
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42", "config_entry_id": entry.entry_id},
+        blocking=True,
+        return_response=True,
+    )
+
+    mock_aula_client.get_messages_for_thread.assert_awaited_once()
+
+
+async def test_get_thread_messages_unknown_config_entry(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An unknown config_entry_id is a user error."""
+    await _setup_integration(hass, mock_aula_client)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "42", "config_entry_id": "nope"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_get_thread_messages_no_loaded_account(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """With the only account unloaded the action reports that, not entries[0]."""
+    entry = await _setup_integration(hass, mock_aula_client)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "42"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_get_thread_messages_ambiguous_account(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Two loaded accounts require an explicit config_entry_id."""
+    await _setup_integration(hass, mock_aula_client)
+    second = make_config_entry(unique_id="second_user")
+    second.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(second.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "42"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_get_thread_messages_auth_error_refreshes_and_retries(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Reads share the presence action's refresh-and-retry behaviour."""
+    entry = await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        side_effect=[AulaAuthenticationError("expired", 401), []]
+    )
+    refresh = AsyncMock(return_value=mock_aula_client)
+    entry.runtime_data.token_manager.async_refresh_and_rebuild_client = refresh
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    refresh.assert_awaited_once()
+    assert mock_aula_client.get_messages_for_thread.await_count == 2
+
+
+async def test_get_thread_messages_connection_error_raises(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """A connection failure surfaces as a HomeAssistantError."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        side_effect=AulaConnectionError("boom", 500)
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "42"},
+            blocking=True,
+            return_response=True,
         )

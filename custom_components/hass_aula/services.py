@@ -15,7 +15,7 @@ from aula import (
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_AREA_ID, ATTR_DEVICE_ID, ATTR_ENTITY_ID
-from homeassistant.core import callback
+from homeassistant.core import SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -27,16 +27,22 @@ from .const import (
     ACTIVITY_TYPES,
     ATTR_ACTIVITY_TYPE,
     ATTR_COMMENT,
+    ATTR_CONFIG_ENTRY_ID,
     ATTR_DATE,
     ATTR_ENTRY_TIME,
     ATTR_EXIT_TIME,
     ATTR_EXIT_WITH,
     ATTR_EXPIRES_AT,
+    ATTR_LIMIT,
     ATTR_REPEAT,
+    ATTR_THREAD_ID,
+    DEFAULT_THREAD_MESSAGES,
     DOMAIN,
     LOGGER,
+    MAX_THREAD_MESSAGES,
     REPEAT_NEVER,
     REPEAT_PATTERNS,
+    SERVICE_GET_THREAD_MESSAGES,
     SERVICE_UPDATE_PRESENCE,
 )
 
@@ -45,7 +51,7 @@ if TYPE_CHECKING:
     from datetime import date, datetime, time
 
     from aula import ActivityType, AulaApiClient
-    from homeassistant.core import HomeAssistant, ServiceCall
+    from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
     from homeassistant.helpers.device_registry import DeviceEntry
 
     from .data import AulaConfigEntry
@@ -67,6 +73,16 @@ UPDATE_PRESENCE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_COMMENT): cv.string,
         vol.Optional(ATTR_REPEAT, default=REPEAT_NEVER): vol.In(REPEAT_PATTERNS),
         vol.Optional(ATTR_EXPIRES_AT): cv.datetime,
+    }
+)
+
+GET_THREAD_MESSAGES_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required(ATTR_THREAD_ID): cv.string,
+        vol.Optional(ATTR_LIMIT, default=DEFAULT_THREAD_MESSAGES): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_THREAD_MESSAGES)
+        ),
     }
 )
 
@@ -179,6 +195,45 @@ def _async_resolve_targets(
         )
 
     return list(grouped.values())
+
+
+@callback
+def _async_resolve_entry(hass: HomeAssistant, call: ServiceCall) -> AulaConfigEntry:
+    """
+    Return the account to query for an action that has no device target.
+
+    Defaults to the only loaded account, which is the normal case, and asks for
+    config_entry_id rather than guessing when more than one is configured.
+    """
+    entry_id: str | None = call.data.get(ATTR_CONFIG_ENTRY_ID)
+    if entry_id is not None:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry is None or entry.domain != DOMAIN:
+            raise _async_invalid_target(entry_id)
+        if entry.state is not ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="entry_not_loaded",
+                translation_placeholders={"target": entry.title},
+            )
+        return cast("AulaConfigEntry", entry)
+
+    loaded = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
+    ]
+    if not loaded:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="no_loaded_account",
+        )
+    if len(loaded) > 1:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="ambiguous_account",
+        )
+    return cast("AulaConfigEntry", loaded[0])
 
 
 def _build_update(call: ServiceCall) -> _PresenceUpdate:
@@ -332,6 +387,33 @@ async def _async_update_presence(call: ServiceCall) -> None:
         await _async_apply(entry, child_ids, update)
 
 
+async def _async_get_thread_messages(call: ServiceCall) -> ServiceResponse:
+    """Handle the get_thread_messages action."""
+    entry = _async_resolve_entry(call.hass, call)
+    thread_id: str = call.data[ATTR_THREAD_ID]
+    limit: int = call.data[ATTR_LIMIT]
+
+    # The subject is deliberately not resolved here: it would cost a second
+    # request per call, and the latest-messages sensor already pairs each
+    # thread_id with its subject.
+    messages = await _async_call_aula(
+        entry,
+        lambda client: client.get_messages_for_thread(thread_id, limit=limit),
+    )
+
+    return {
+        "thread_id": thread_id,
+        "messages": [
+            {
+                "id": message.id,
+                "content": message.content,
+                "content_markdown": message.content_markdown,
+            }
+            for message in messages
+        ],
+    }
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register the Aula actions."""
@@ -340,4 +422,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_UPDATE_PRESENCE,
         _async_update_presence,
         schema=UPDATE_PRESENCE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        _async_get_thread_messages,
+        schema=GET_THREAD_MESSAGES_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )

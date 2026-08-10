@@ -322,6 +322,7 @@ class AulaLatestMessagesSensor(
         return {
             "messages": [
                 {
+                    "thread_id": message.thread_id,
                     "subject": message.subject,
                     "sender": message.sender,
                     "date": message.date,

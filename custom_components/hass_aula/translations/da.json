@@ -134,6 +134,12 @@
     },
     "no_target": {
       "message": "Der blev ikke valgt noget Aula-barn. Vælg mindst én barne-enhed."
+    },
+    "no_loaded_account": {
+      "message": "Ingen Aula-konto er indlæst. Kontroller integrationen og prøv igen."
+    },
+    "ambiguous_account": {
+      "message": "Der er konfigureret mere end én Aula-konto. Angiv config_entry_id for at vælge, hvilken der skal læses."
     }
   },
   "services": {
@@ -172,6 +178,24 @@
         "expires_at": {
           "name": "Udløber",
           "description": "Hvornår en gentagelse stopper. Standard er skoleårets afslutning."
+        }
+      }
+    },
+    "get_thread_messages": {
+      "name": "Hent beskeder i tråd",
+      "description": "Returnerer den fulde tekst af beskederne i én tråd. Tråd-id'er findes i attributten \"messages\" på sensoren Seneste beskeder.",
+      "fields": {
+        "thread_id": {
+          "name": "Tråd-id",
+          "description": "Tråden der skal læses."
+        },
+        "limit": {
+          "name": "Antal",
+          "description": "Hvor mange af de nyeste beskeder der returneres, fra 1 til 50."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Hvilken Aula-konto der skal læses. Kun nødvendig når der er konfigureret mere end én."
         }
       }
     }

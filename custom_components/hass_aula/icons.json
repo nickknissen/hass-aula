@@ -41,6 +41,9 @@
   "services": {
     "update_presence": {
       "service": "mdi:clock-edit-outline"
+    },
+    "get_thread_messages": {
+      "service": "mdi:message-text-outline"
     }
   }
 }
