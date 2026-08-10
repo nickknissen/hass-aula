@@ -22,6 +22,16 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 
 ---
 
+## Why a separate integration?
+
+[scaarup/aula](https://github.com/scaarup/aula) came first, is in the HACS default store, and still works — if it covers what you need, use it. This project exists because of a structural difference, not a missing feature.
+
+Everything Aula-specific here — the MitID login flow, the API client, the data models — lives in [`aula`](https://pypi.org/project/aula/), a standalone typed Python package with its own test suite and release cycle. It ships a CLI and can be used from any program, and this repository is only the thin Home Assistant layer on top. That split is what makes the rest practical: a coordinator per data domain with its own poll interval, typed models rather than dictionary lookups, reauthentication and reconfiguration flows, diagnostics, and translations.
+
+Arriving there as a pull request would have meant replacing almost all of the existing integration's internals in one go — a rewrite wearing a PR's clothes, aimed at a codebase whose users are happy with it. Two integrations making different trade-offs seemed healthier than one disruptive change. Ideas still travel between them: `get_thread_messages` came from [a fork](https://github.com/dkpoulsen/hass-aula) of this project. And where the two look most alike — speaking the MitID protocol — both trace back to the same upstream, [Hundter/MitID-BrowserClient](https://github.com/Hundter/MitID-BrowserClient).
+
+---
+
 ## Prerequisites
 
 - Home Assistant **2026.1** or newer
