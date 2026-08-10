@@ -59,3 +59,27 @@ update_presence:
       advanced: true
       selector:
         datetime:
+
+# No "response" key: hassfest allows only fields/target/name/description. The
+# response is advertised by supports_response on the Python registration.
+get_thread_messages:
+  fields:
+    thread_id:
+      required: true
+      example: "12345"
+      selector:
+        text:
+    limit:
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    config_entry_id:
+      required: false
+      advanced: true
+      selector:
+        config_entry:
+          integration: hass_aula

@@ -247,6 +247,7 @@ def mock_message(
     message.id = message_id
     message.content_html = f"<p>{content}</p>"
     message.content = content
+    message.content_markdown = content
     message._raw = {
         "id": message_id,
         "sender": {"fullName": sender} if sender else {},

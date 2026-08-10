@@ -69,6 +69,7 @@ class HuskelistenChildData:
 class MessagePreview:
     """A single message shown by the latest-messages sensor."""
 
+    thread_id: str
     subject: str
     sender: str | None
     date: str | None

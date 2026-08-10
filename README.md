@@ -121,8 +121,10 @@ The following entities are created **per child**:
 |-----------|-------------|
 | `messages` | The 5 most recent message threads |
 
-Each entry in `messages` carries `subject`, `sender`, `date`, `unread` and a
-`preview` of the newest message in that thread (clipped to 200 characters).
+Each entry in `messages` carries `thread_id`, `subject`, `sender`, `date`, `unread`
+and a `preview` of the newest message in that thread (clipped to 200 characters).
+Pass a `thread_id` to [`hass_aula.get_thread_messages`](#hass_aulaget_thread_messages)
+to read the full text.
 
 ### Calendar
 
@@ -188,6 +190,32 @@ automation:
           exit_time: "13:00"
           exit_with: "Nick Nissen (Far)"
 ```
+
+### `hass_aula.get_thread_messages`
+
+Returns the full text of the messages in one thread. The `latest_messages` sensor only carries 200-character previews, so this is how you read a whole message.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `thread_id` | yes | Thread to read. Taken from the `messages` attribute of the Latest messages sensor |
+| `limit` | no | How many of the newest messages to return, 1–50. Defaults to 5 |
+| `config_entry_id` | no | Which Aula account to read. Only needed if you have more than one configured |
+
+This action returns a response, so call it with `response_variable`:
+
+```yaml
+sequence:
+  - action: hass_aula.get_thread_messages
+    data:
+      thread_id: >
+        {{ state_attr('sensor.test_parent_latest_messages', 'messages')[0].thread_id }}
+    response_variable: thread
+  - action: notify.mobile_app_my_phone
+    data:
+      message: "{{ thread.messages[0].content }}"
+```
+
+Each entry in `messages` carries `id`, `content` (plain text) and `content_markdown`.
 
 ---
 

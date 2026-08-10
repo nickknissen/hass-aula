@@ -327,6 +327,7 @@ def _message_preview(
         preview = message.content[:MAX_PREVIEW_CHARS]
 
     return MessagePreview(
+        thread_id=thread.thread_id,
         subject=thread.subject,
         sender=sender,
         date=sent_at or thread_raw.get("lastUpdatedDate"),

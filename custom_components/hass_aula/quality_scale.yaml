@@ -6,8 +6,8 @@ rules:
   action-setup:
     status: done
     comment: >
-      update_presence is registered in async_setup via services.py, so it exists
-      even when no entry is loaded and raises ServiceValidationError in that case.
+      All actions are registered in async_setup via services.py, so they exist
+      even when no entry is loaded and raise ServiceValidationError in that case.
   appropriate-polling:
     status: done
     comment: Presence polls every 5 min, calendar every 60 min.
@@ -28,7 +28,7 @@ rules:
     comment: Uses aula==1.4.0 from PyPI.
   docs-actions:
     status: done
-    comment: update_presence documented in README with an automation example.
+    comment: Both actions documented in README with automation examples.
   docs-high-level-description:
     status: done
   docs-installation-instructions:
@@ -61,7 +61,7 @@ rules:
   action-exceptions:
     status: done
     comment: >
-      update_presence raises ServiceValidationError for bad input or targets and
+      Actions raise ServiceValidationError for bad input or targets and
       HomeAssistantError for API failures, all with translated messages.
   config-entry-unloading:
     status: done

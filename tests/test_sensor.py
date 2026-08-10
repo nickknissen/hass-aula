@@ -251,6 +251,9 @@ async def test_latest_messages_sensor_state_and_attributes(
 
     messages = state.attributes["messages"]
     assert len(messages) == 2
+    # thread_id lets an automation feed get_thread_messages straight from here.
+    assert messages[0]["thread_id"] == "1"
+    assert messages[1]["thread_id"] == "2"
     assert messages[0]["subject"] == "Skolefest"
     assert messages[0]["sender"] == "Anne Jensen"
     assert messages[0]["preview"] == "Kære forældre"

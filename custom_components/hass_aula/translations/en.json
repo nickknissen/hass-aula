@@ -134,6 +134,12 @@
     },
     "no_target": {
       "message": "No Aula child was targeted. Select at least one child device."
+    },
+    "no_loaded_account": {
+      "message": "No Aula account is loaded. Check the integration and try again."
+    },
+    "ambiguous_account": {
+      "message": "More than one Aula account is configured. Set config_entry_id to choose which one to read."
     }
   },
   "services": {
@@ -172,6 +178,24 @@
         "expires_at": {
           "name": "Expires at",
           "description": "When a repeating entry stops. Defaults to the end of the school year."
+        }
+      }
+    },
+    "get_thread_messages": {
+      "name": "Get thread messages",
+      "description": "Returns the full text of the messages in one thread. Thread IDs are listed in the \"messages\" attribute of the Latest messages sensor.",
+      "fields": {
+        "thread_id": {
+          "name": "Thread ID",
+          "description": "The thread to read."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "How many of the newest messages to return, from 1 to 50."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Which Aula account to read. Only needed when more than one is configured."
         }
       }
     }

@@ -28,15 +28,23 @@ CONF_TOKEN_DATA = "token_data"  # noqa: S105
 CONF_WIDGETS = "widgets"
 
 SERVICE_UPDATE_PRESENCE = "update_presence"
+SERVICE_GET_THREAD_MESSAGES = "get_thread_messages"
 
 ATTR_ACTIVITY_TYPE = "activity_type"
 ATTR_COMMENT = "comment"
+ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_DATE = "date"
 ATTR_ENTRY_TIME = "entry_time"
 ATTR_EXIT_TIME = "exit_time"
 ATTR_EXIT_WITH = "exit_with"
 ATTR_EXPIRES_AT = "expires_at"
+ATTR_LIMIT = "limit"
 ATTR_REPEAT = "repeat"
+ATTR_THREAD_ID = "thread_id"
+
+# Aula's own message list pages at 10; 50 is a generous ceiling for one thread.
+MAX_THREAD_MESSAGES = 50
+DEFAULT_THREAD_MESSAGES = 5
 
 ACTIVITY_TYPE_PICKED_UP_BY = "picked_up_by"
 
