@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
+from aula.auth.exceptions import PasswordInvalidError, TokenInvalidError
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.hass_aula.const import (
+    AUTH_METHOD_APP,
+    AUTH_METHOD_TOKEN,
+    CONF_AUTH_METHOD,
+    CONF_MITID_PASSWORD,
     CONF_MITID_USERNAME,
+    CONF_TOKEN_CODE,
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
     DOMAIN,
@@ -265,3 +274,299 @@ async def test_reconfigure_flow_token_expired(
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+
+
+def _wrapped_mitid_error(cause: Exception) -> RuntimeError:
+    """Build the RuntimeError aula.authenticate raises for a MitID failure."""
+    err = RuntimeError(f"MitID authentication failed: {cause}")
+    err.__cause__ = cause
+    return err
+
+
+async def test_token_flow_success(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test signing in with a MitID code display instead of the app."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MITID_USERNAME: MOCK_USERNAME,
+            CONF_AUTH_METHOD: AUTH_METHOD_TOKEN,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "mitid_token"
+
+    # Read the credentials the way the library does, while auth is running —
+    # the flow wipes them as soon as it succeeds.
+    seen: dict[str, str] = {}
+
+    async def fake_authenticate(**kwargs: Any) -> dict[str, Any]:
+        seen["auth_method"] = kwargs["auth_method"]
+        seen["code"] = await kwargs["on_token_digits"]()
+        seen["password"] = await kwargs["on_password"]()
+        return MOCK_TOKEN_DATA
+
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            side_effect=fake_authenticate,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_MITID_PASSWORD: "hunter2",
+                CONF_TOKEN_CODE: "123456",
+            },
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            result = await _advance_to_select_widgets(hass, result["flow_id"])
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_widgets"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: []},
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AUTH_METHOD] == AUTH_METHOD_TOKEN
+    # The password and code are single-use, so they must not reach the entry.
+    assert CONF_MITID_PASSWORD not in result["data"]
+    assert CONF_TOKEN_CODE not in result["data"]
+
+    assert seen == {
+        "auth_method": AUTH_METHOD_TOKEN,
+        "code": "123456",
+        "password": "hunter2",
+    }
+
+
+async def test_app_flow_records_auth_method(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test the app method is the default and is stored on the entry."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ) as mock_auth,
+        patch(_FETCH_WIDGETS, return_value=[]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            result = await _advance_to_select_widgets(hass, result["flow_id"])
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: []},
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AUTH_METHOD] == AUTH_METHOD_APP
+    assert mock_auth.await_args.kwargs["auth_method"] == AUTH_METHOD_APP
+
+
+@pytest.mark.parametrize("code", ["12345", "1234567", "12345a", "      "])
+async def test_token_flow_rejects_malformed_code(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    code: str,
+) -> None:
+    """Test a code that is not 6 digits is caught before calling MitID."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MITID_USERNAME: MOCK_USERNAME,
+            CONF_AUTH_METHOD: AUTH_METHOD_TOKEN,
+        },
+    )
+
+    with patch(
+        "custom_components.hass_aula.config_flow.authenticate",
+    ) as mock_auth:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_MITID_PASSWORD: "hunter2", CONF_TOKEN_CODE: code},
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "mitid_token"
+    assert result["errors"] == {CONF_TOKEN_CODE: "invalid_token_code"}
+    mock_auth.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("cause", "expected_error"),
+    [
+        (TokenInvalidError("rejected"), "invalid_token_code"),
+        (PasswordInvalidError("rejected"), "invalid_password"),
+        (RuntimeError("something else"), "auth_failed"),
+    ],
+)
+async def test_token_flow_rejected_credentials_returns_to_form(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    cause: Exception,
+    expected_error: str,
+) -> None:
+    """Test a rejected code or password is retryable instead of a dead end."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MITID_USERNAME: MOCK_USERNAME,
+            CONF_AUTH_METHOD: AUTH_METHOD_TOKEN,
+        },
+    )
+    flow_id = result["flow_id"]
+
+    with patch(
+        "custom_components.hass_aula.config_flow.authenticate",
+        side_effect=_wrapped_mitid_error(cause),
+    ) as mock_auth:
+        result = await hass.config_entries.flow.async_configure(
+            flow_id,
+            user_input={CONF_MITID_PASSWORD: "hunter2", CONF_TOKEN_CODE: "123456"},
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(flow_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "mitid_token"
+    assert result["errors"] == {"base": expected_error}
+    # The rejected code must not be replayed into MitID on the way back.
+    assert mock_auth.await_count == 1
+
+    # The retry must run a fresh auth attempt rather than reusing the dead task.
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            flow_id,
+            user_input={CONF_MITID_PASSWORD: "hunter2", CONF_TOKEN_CODE: "654321"},
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            result = await _advance_to_select_widgets(hass, flow_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "select_widgets"
+
+
+async def test_app_flow_shows_otp_code_when_qr_is_not_offered(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test the typed-code channel shows the code instead of spinning on a QR."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+
+    release = asyncio.Event()
+
+    async def fake_authenticate(**kwargs: Any) -> dict[str, Any]:
+        # MitID picks the typed-code channel: on_otp_code fires, on_qr_codes never does.
+        kwargs["on_otp_code"]("482913")
+        await release.wait()
+        return MOCK_TOKEN_DATA
+
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            side_effect=fake_authenticate,
+        ),
+        patch(_FETCH_WIDGETS, return_value=[]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
+        )
+        flow_id = result["flow_id"]
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(flow_id)
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "mitid_otp"
+        assert result["description_placeholders"] == {"otp_code": "482913"}
+
+        # Approving in the app finishes the auth; Submit then completes the flow.
+        release.set()
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(flow_id, user_input={})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "select_widgets"
+
+
+async def test_reauth_reuses_stored_token_method(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reauth asks for a new code when the account uses a code display."""
+    entry = make_config_entry(
+        data={
+            CONF_MITID_USERNAME: MOCK_USERNAME,
+            CONF_AUTH_METHOD: AUTH_METHOD_TOKEN,
+            CONF_TOKEN_DATA: MOCK_TOKEN_DATA,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    await entry.start_reauth_flow(hass)
+    await hass.async_block_till_done()
+    flow_id = hass.config_entries.flow.async_progress()[0]["flow_id"]
+
+    result = await hass.config_entries.flow.async_configure(flow_id)
+    assert result["step_id"] == "reauth_confirm"
+
+    result = await hass.config_entries.flow.async_configure(flow_id, user_input={})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "mitid_token"
+
+    with patch(
+        "custom_components.hass_aula.config_flow.authenticate",
+        return_value=MOCK_TOKEN_DATA,
+    ) as mock_auth:
+        result = await hass.config_entries.flow.async_configure(
+            flow_id,
+            user_input={CONF_MITID_PASSWORD: "hunter2", CONF_TOKEN_CODE: "123456"},
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(flow_id)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert mock_auth.await_args.kwargs["auth_method"] == AUTH_METHOD_TOKEN
+    assert entry.data[CONF_AUTH_METHOD] == AUTH_METHOD_TOKEN

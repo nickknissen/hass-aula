@@ -23,9 +23,20 @@ DOMAIN = "hass_aula"
 
 EVENT_NOTIFICATION = "hass_aula_notification"
 
+CONF_AUTH_METHOD = "auth_method"
+CONF_MITID_PASSWORD = "mitid_password"  # noqa: S105
 CONF_MITID_USERNAME = "mitid_username"
+CONF_TOKEN_CODE = "token_code"  # noqa: S105
 CONF_TOKEN_DATA = "token_data"  # noqa: S105
 CONF_WIDGETS = "widgets"
+
+# MitID authenticators this integration can drive. "app" approves the login in
+# the MitID app; "token" reads a one-time code off a MitID kodeviser (code
+# display), which users without a smartphone rely on.
+AUTH_METHOD_APP = "app"
+AUTH_METHOD_TOKEN = "token"  # noqa: S105
+AUTH_METHODS = [AUTH_METHOD_APP, AUTH_METHOD_TOKEN]
+TOKEN_CODE_LENGTH = 6
 
 SERVICE_UPDATE_PRESENCE = "update_presence"
 SERVICE_GET_THREAD_MESSAGES = "get_thread_messages"
