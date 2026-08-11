@@ -25,7 +25,7 @@ rules:
     comment: All flow paths tested.
   dependency-transparency:
     status: done
-    comment: Uses aula==1.4.0 from PyPI.
+    comment: Uses aula==1.5.0 from PyPI.
   docs-actions:
     status: done
     comment: Both actions documented in README with automation examples.
