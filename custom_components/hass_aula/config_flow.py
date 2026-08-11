@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import voluptuous as vol
 from aula import WidgetConfiguration, authenticate, create_client
+from aula.auth.exceptions import PasswordInvalidError, TokenInvalidError
 from aula.auth.mitid_client import MitIDAuthClient
 from aula.http_httpx import HttpxHttpClient
 from homeassistant.config_entries import (
@@ -21,17 +22,50 @@ from homeassistant.helpers import selector
 from slugify import slugify
 
 from .const import (
+    AUTH_METHOD_APP,
+    AUTH_METHOD_TOKEN,
+    AUTH_METHODS,
+    CONF_AUTH_METHOD,
+    CONF_MITID_PASSWORD,
     CONF_MITID_USERNAME,
+    CONF_TOKEN_CODE,
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
     DOMAIN,
     LOGGER,
     SUPPORTED_WIDGETS,
+    TOKEN_CODE_LENGTH,
 )
 from .qr_view import AulaQRView, generate_animated_qr_svg
 
 if TYPE_CHECKING:
     import qrcode
+
+
+def _auth_method_selector() -> selector.SelectSelector:
+    """Selector for the MitID authenticator to use."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=AUTH_METHODS,
+            translation_key=CONF_AUTH_METHOD,
+            mode=selector.SelectSelectorMode.LIST,
+        ),
+    )
+
+
+def _token_error_code(err: BaseException | None) -> str:
+    """
+    Map a failed kodeviser login to a form error key.
+
+    ``aula.authenticate`` wraps MitID failures in a RuntimeError, so the
+    specific cause is read off ``__cause__``.
+    """
+    cause = err.__cause__ if err is not None else None
+    if isinstance(cause, TokenInvalidError):
+        return "invalid_token_code"
+    if isinstance(cause, PasswordInvalidError):
+        return "invalid_password"
+    return "auth_failed"
 
 
 class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
@@ -52,6 +86,13 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._existing_entry: ConfigEntry | None = None
         self._is_reconfigure: bool = False
         self._available_widgets: list[WidgetConfiguration] = []
+        self._auth_method: str = AUTH_METHOD_APP
+        # Kodeviser credentials. Held in memory for the duration of the flow
+        # only — never written to the config entry.
+        self._mitid_password: str = ""
+        self._token_code: str = ""
+        self._token_error: str | None = None
+        self._otp_code: str | None = None
 
     async def async_step_user(
         self,
@@ -62,9 +103,10 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._mitid_username = user_input[CONF_MITID_USERNAME]
+            self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_METHOD_APP)
             await self.async_set_unique_id(slugify(self._mitid_username))
             self._abort_if_unique_id_configured()
-            return await self.async_step_mitid_auth()
+            return await self._async_start_auth()
 
         return self.async_show_form(
             step_id="user",
@@ -75,8 +117,66 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                             type=selector.TextSelectorType.TEXT,
                         ),
                     ),
+                    vol.Required(
+                        CONF_AUTH_METHOD, default=AUTH_METHOD_APP
+                    ): _auth_method_selector(),
                 },
             ),
+            errors=errors,
+        )
+
+    async def _async_start_auth(self) -> ConfigFlowResult:
+        """Route to the step that collects what the chosen authenticator needs."""
+        if self._auth_method == AUTH_METHOD_TOKEN:
+            return await self.async_step_mitid_token()
+        return await self.async_step_mitid_auth()
+
+    async def async_step_mitid_token(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """
+        Collect the MitID password and kodeviser code before authenticating.
+
+        The code is one-time and short-lived, so it is collected immediately
+        before the auth run rather than stored.
+        """
+        errors: dict[str, str] = {}
+        if self._token_error:
+            errors["base"] = self._token_error
+            self._token_error = None
+            # Reached from mitid_auth via progress_done. The flow manager replays
+            # the input that started the failed attempt, so drop it — resubmitting
+            # a rejected code would loop straight back into MitID.
+            user_input = None
+
+        if user_input is not None:
+            password = user_input[CONF_MITID_PASSWORD]
+            code = user_input[CONF_TOKEN_CODE].strip()
+            if not code.isdigit() or len(code) != TOKEN_CODE_LENGTH:
+                errors[CONF_TOKEN_CODE] = "invalid_token_code"
+            else:
+                self._mitid_password = password
+                self._token_code = code
+                return await self.async_step_mitid_auth()
+
+        return self.async_show_form(
+            step_id="mitid_token",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_MITID_PASSWORD): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
+                    vol.Required(CONF_TOKEN_CODE): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.TEXT,
+                        ),
+                    ),
+                },
+            ),
+            description_placeholders={CONF_MITID_USERNAME: self._mitid_username},
             errors=errors,
         )
 
@@ -84,14 +184,20 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> ConfigFlowResult:
-        """Handle MitID authentication with QR code display."""
+        """Handle MitID authentication, showing a QR code for the app method."""
+        uses_qr = self._auth_method != AUTH_METHOD_TOKEN
         if not self._auth_task:
-            LOGGER.debug("Starting MitID auth flow for %s", self._mitid_username)
-            self._qr_ready_event = asyncio.Event()
-            self._qr_ready_task = self.hass.async_create_task(
-                self._wait_for_qr_ready(),
-                "hass_aula_qr_ready",
+            LOGGER.debug(
+                "Starting MitID auth flow for %s using %s",
+                self._mitid_username,
+                self._auth_method,
             )
+            if uses_qr:
+                self._qr_ready_event = asyncio.Event()
+                self._qr_ready_task = self.hass.async_create_task(
+                    self._wait_for_qr_ready(),
+                    "hass_aula_qr_ready",
+                )
             # Build the SSL context in an executor to avoid blocking the event
             # loop with ssl.SSLContext.load_verify_locations.
             ssl_context = await self.hass.async_add_executor_job(
@@ -105,8 +211,9 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             # Register the view BEFORE creating the auth task.
             # The task starts eagerly, so on_qr_codes fires synchronously during
             # task creation — _qr_view must already exist at that point.
-            self._register_qr_view()
-            LOGGER.debug("QR view registered at /api/hass_aula/qr/%s", self.flow_id)
+            if uses_qr:
+                self._register_qr_view()
+                LOGGER.debug("QR view registered at /api/hass_aula/qr/%s", self.flow_id)
             self._auth_task = self.hass.async_create_task(
                 self._async_authenticate(),
                 "hass_aula_mitid_auth",
@@ -116,18 +223,27 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 "qr_view has svg=%s, qr_ready_event set=%s",
                 self._qr_svg is not None,
                 self._qr_view is not None and self._qr_view._svg is not None,  # noqa: SLF001
-                self._qr_ready_event.is_set(),
+                self._qr_ready_event is not None and self._qr_ready_event.is_set(),
             )
 
         if self._auth_task.done():
-            self._unregister_qr_view()
-            if self._auth_task.exception():
-                err = self._auth_task.exception()
-                LOGGER.error("MitID authentication failed: %s", err)
-                return self.async_abort(reason="auth_failed")
+            return await self._async_auth_task_finished(
+                self._auth_task, uses_qr=uses_qr
+            )
 
-            self._token_data = self._auth_task.result()
-            return await self._async_auth_complete()
+        if not uses_qr:
+            # Kodeviser: nothing to display, just wait for the handshake.
+            return self.async_show_progress(
+                step_id="mitid_auth",
+                progress_action="authenticating_token",
+                progress_task=self._auth_task,
+            )
+
+        # MitID asked for a typed code instead of a QR scan. Nothing will ever be
+        # drawn for this user, so show the code rather than spinning forever.
+        if self._otp_code:
+            LOGGER.debug("OTP code requested, transitioning to OTP form step")
+            return self.async_show_progress_done(next_step_id="mitid_otp")
 
         # QR is ready — transition out of progress via progress_done, then show QR form.
         # SHOW_PROGRESS can only transition to SHOW_PROGRESS or SHOW_PROGRESS_DONE;
@@ -152,6 +268,28 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             progress_task=progress_task,
         )
 
+    async def _async_auth_task_finished(
+        self,
+        task: asyncio.Task[dict[str, Any]],
+        *,
+        uses_qr: bool,
+    ) -> ConfigFlowResult:
+        """Turn a completed auth attempt into the next flow step."""
+        self._unregister_qr_view()
+        if err := task.exception():
+            LOGGER.error("MitID authentication failed: %s", err)
+            if uses_qr:
+                return self.async_abort(reason="auth_failed")
+            # A mistyped code or password is worth a retry rather than a dead
+            # end. SHOW_PROGRESS cannot become SHOW_FORM directly, so hand
+            # control back via progress_done.
+            self._token_error = _token_error_code(err)
+            self._reset_auth_task()
+            return self.async_show_progress_done(next_step_id="mitid_token")
+
+        self._token_data = task.result()
+        return await self._async_auth_complete()
+
     async def async_step_mitid_auth_done(
         self,
         user_input: dict[str, Any] | None = None,  # noqa: ARG002
@@ -166,6 +304,8 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         # SHOW_PROGRESS does not render description_placeholders in the frontend,
         # so switch to a FORM step which does render its description markdown.
         if self._auth_task and not self._auth_task.done():
+            if self._otp_code:
+                return await self.async_step_mitid_otp()
             return await self.async_step_mitid_qr()
 
         self._unregister_qr_view()
@@ -210,6 +350,27 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             description_placeholders={"qr_url": f"/api/hass_aula/qr/{self.flow_id}"},
         )
 
+    async def async_step_mitid_otp(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Show the code MitID wants typed into the app instead of a QR scan."""
+        if user_input is not None and self._auth_task and self._auth_task.done():
+            self._unregister_qr_view()
+            if self._auth_task.exception():
+                LOGGER.error(
+                    "MitID authentication failed: %s", self._auth_task.exception()
+                )
+                return self.async_abort(reason="auth_failed")
+            self._token_data = self._auth_task.result()
+            return await self._async_auth_complete()
+
+        return self.async_show_form(
+            step_id="mitid_otp",
+            data_schema=vol.Schema({}),
+            description_placeholders={"otp_code": self._otp_code or ""},
+        )
+
     async def async_step_select_widgets(
         self,
         user_input: dict[str, Any] | None = None,
@@ -221,6 +382,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = {
                 CONF_MITID_USERNAME: self._mitid_username,
+                CONF_AUTH_METHOD: self._auth_method,
                 CONF_TOKEN_DATA: self._token_data,
                 CONF_WIDGETS: user_input.get(CONF_WIDGETS, []),
             }
@@ -281,6 +443,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="unknown")
         self._existing_entry = entry
         self._mitid_username = entry_data[CONF_MITID_USERNAME]
+        self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_METHOD_APP)
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -289,7 +452,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle reauth confirmation - starts MitID auth."""
         if user_input is not None:
-            return await self.async_step_mitid_auth()
+            return await self._async_start_auth()
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -315,12 +478,16 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._mitid_username = user_input[CONF_MITID_USERNAME]
-            return await self.async_step_mitid_auth()
+            self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_METHOD_APP)
+            return await self._async_start_auth()
 
         self._mitid_username = (
             reconfigure_entry.data.get(CONF_MITID_USERNAME, "")
             if reconfigure_entry
             else ""
+        )
+        self._auth_method = reconfigure_entry.data.get(
+            CONF_AUTH_METHOD, AUTH_METHOD_APP
         )
 
         # Try refreshing the existing token to skip MitID auth
@@ -351,6 +518,10 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                             type=selector.TextSelectorType.TEXT,
                         ),
                     ),
+                    vol.Required(
+                        CONF_AUTH_METHOD,
+                        default=self._auth_method,
+                    ): _auth_method_selector(),
                 },
             ),
             errors=errors,
@@ -358,11 +529,15 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def _async_auth_complete(self) -> ConfigFlowResult:
         """Route to widget selection or skip for reauth."""
+        # The kodeviser credentials are single-use; drop them once they worked.
+        self._mitid_password = ""
+        self._token_code = ""
         if self._existing_entry and not self._is_reconfigure:
             return self.async_update_reload_and_abort(
                 self._existing_entry,
                 data={
                     CONF_MITID_USERNAME: self._mitid_username,
+                    CONF_AUTH_METHOD: self._auth_method,
                     CONF_TOKEN_DATA: self._token_data,
                     CONF_WIDGETS: self._existing_entry.data.get(CONF_WIDGETS, []),
                 },
@@ -436,12 +611,34 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
                 self._qr_ready_event.set()
                 LOGGER.debug("QR ready event set")
 
-        LOGGER.debug("Calling aula.authenticate for %s", self._mitid_username)
+        def on_otp_code(code: str) -> None:
+            # MitID chose the typed-code channel, so on_qr_codes will never fire.
+            # Release the same wait the QR path uses, or the flow spins forever.
+            LOGGER.debug("OTP code received from MitID")
+            self._otp_code = code
+            if self._qr_ready_event:
+                self._qr_ready_event.set()
+
+        async def on_token_digits() -> str:
+            return self._token_code
+
+        async def on_password() -> str:
+            return self._mitid_password
+
+        LOGGER.debug(
+            "Calling aula.authenticate for %s using %s",
+            self._mitid_username,
+            self._auth_method,
+        )
         try:
             result = await authenticate(
                 mitid_username=self._mitid_username,
                 on_qr_codes=on_qr_codes,
                 httpx_client=self._httpx_client,
+                auth_method=self._auth_method,
+                on_token_digits=on_token_digits,
+                on_password=on_password,
+                on_otp_code=on_otp_code,
             )
         finally:
             if self._httpx_client:
@@ -453,6 +650,16 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         """Wait until QR codes have been generated."""
         if self._qr_ready_event:
             await self._qr_ready_event.wait()
+
+    def _reset_auth_task(self) -> None:
+        """Drop a finished auth attempt so the next one starts clean."""
+        self._auth_task = None
+        self._qr_ready_task = None
+        self._qr_ready_event = None
+        self._qr_svg = None
+        self._httpx_client = None
+        self._token_code = ""
+        self._otp_code = None
 
     def _register_qr_view(self) -> None:
         """Register a temporary HTTP view for serving the QR code SVG."""

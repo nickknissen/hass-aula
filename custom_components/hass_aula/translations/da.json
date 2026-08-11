@@ -4,15 +4,33 @@
       "user": {
         "description": "Indtast dit MitID brugernavn for at starte godkendelse.",
         "data": {
-          "mitid_username": "MitID brugernavn"
+          "mitid_username": "MitID brugernavn",
+          "auth_method": "Loginmetode"
         },
         "data_description": {
-          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID."
+          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID.",
+          "auth_method": "Godkend i MitID-appen, eller indtast en kode fra din MitID kodeviser."
         }
       },
       "mitid_auth": {
         "title": "MitID Godkendelse",
         "description": "Åbn MitID-appen og godkend login."
+      },
+      "mitid_otp": {
+        "title": "Indtast koden i MitID-appen",
+        "description": "MitID-appen bad om en kode i stedet for en QR-scanning. Indtast denne kode i appen, godkend login, og klik derefter **Send**.\n\n## {otp_code}"
+      },
+      "mitid_token": {
+        "title": "MitID kodeviser",
+        "description": "Indtast MitID-adgangskoden for **{mitid_username}** og en ny kode fra din kodeviser. Koden gælder kun kort tid, så aflæs den lige inden du sender.",
+        "data": {
+          "mitid_password": "MitID adgangskode",
+          "token_code": "Kode fra kodeviseren"
+        },
+        "data_description": {
+          "mitid_password": "Din MitID-adgangskode. Den bruges kun til dette login og bliver ikke gemt.",
+          "token_code": "De 6 cifre der vises på din MitID kodeviser."
+        }
       },
       "mitid_qr": {
         "title": "Scan QR-kode",
@@ -35,19 +53,24 @@
       "reconfigure": {
         "description": "Opdater dit MitID brugernavn og godkend igen.",
         "data": {
-          "mitid_username": "MitID brugernavn"
+          "mitid_username": "MitID brugernavn",
+          "auth_method": "Loginmetode"
         },
         "data_description": {
-          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID."
+          "mitid_username": "Det brugernavn du bruger til at logge ind med MitID.",
+          "auth_method": "Godkend i MitID-appen, eller indtast en kode fra din MitID kodeviser."
         }
       }
     },
     "progress": {
-      "authenticating": "Åbn MitID-appen og godkend login."
+      "authenticating": "Åbn MitID-appen og godkend login.",
+      "authenticating_token": "Logger ind med koden fra din MitID kodeviser."
     },
     "error": {
       "auth_failed": "MitID-godkendelse mislykkedes. Prøv venligst igen.",
       "connection": "Kan ikke oprette forbindelse til Aula. Kontroller venligst dit netværk.",
+      "invalid_password": "MitID afviste adgangskoden. Kontroller den og prøv igen.",
+      "invalid_token_code": "MitID afviste koden. Aflæs en ny 6-cifret kode på din kodeviser og prøv igen.",
       "unknown": "Der opstod en ukendt fejl."
     },
     "abort": {
@@ -201,6 +224,12 @@
     }
   },
   "selector": {
+    "auth_method": {
+      "options": {
+        "app": "MitID app",
+        "token": "MitID kodeviser"
+      }
+    },
     "activity_type": {
       "options": {
         "picked_up_by": "Hentes af",

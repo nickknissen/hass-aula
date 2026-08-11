@@ -4,15 +4,33 @@
       "user": {
         "description": "Enter your MitID username to begin authentication.",
         "data": {
-          "mitid_username": "MitID username"
+          "mitid_username": "MitID username",
+          "auth_method": "Login method"
         },
         "data_description": {
-          "mitid_username": "The username you use to log in with MitID."
+          "mitid_username": "The username you use to log in with MitID.",
+          "auth_method": "Approve in the MitID app, or type a code from your MitID code display."
         }
       },
       "mitid_auth": {
         "title": "MitID Authentication",
         "description": "Open the MitID app and approve the login request."
+      },
+      "mitid_otp": {
+        "title": "Enter the code in the MitID app",
+        "description": "The MitID app asked for a code instead of a QR scan. Type this code in the app, approve the login, then click **Submit**.\n\n## {otp_code}"
+      },
+      "mitid_token": {
+        "title": "MitID code display",
+        "description": "Enter the MitID password for **{mitid_username}** and a fresh code from your code display. The code is only valid for a short time, so read it right before you submit.",
+        "data": {
+          "mitid_password": "MitID password",
+          "token_code": "Code from the code display"
+        },
+        "data_description": {
+          "mitid_password": "Your MitID password. It is used for this login only and is not stored.",
+          "token_code": "The 6 digits shown on your MitID code display."
+        }
       },
       "mitid_qr": {
         "title": "Scan QR Code",
@@ -35,19 +53,24 @@
       "reconfigure": {
         "description": "Token refresh failed. Enter your MitID username to re-authenticate.",
         "data": {
-          "mitid_username": "MitID username"
+          "mitid_username": "MitID username",
+          "auth_method": "Login method"
         },
         "data_description": {
-          "mitid_username": "The username you use to log in with MitID."
+          "mitid_username": "The username you use to log in with MitID.",
+          "auth_method": "Approve in the MitID app, or type a code from your MitID code display."
         }
       }
     },
     "progress": {
-      "authenticating": "Open the MitID app and approve the login request."
+      "authenticating": "Open the MitID app and approve the login request.",
+      "authenticating_token": "Signing in with the code from your MitID code display."
     },
     "error": {
       "auth_failed": "MitID authentication failed. Please try again.",
       "connection": "Unable to connect to Aula. Please check your network.",
+      "invalid_password": "MitID rejected the password. Check it and try again.",
+      "invalid_token_code": "MitID rejected the code. Read a fresh 6 digit code from your code display and try again.",
       "unknown": "An unknown error occurred."
     },
     "abort": {
@@ -201,6 +224,12 @@
     }
   },
   "selector": {
+    "auth_method": {
+      "options": {
+        "app": "MitID app",
+        "token": "MitID code display"
+      }
+    },
     "activity_type": {
       "options": {
         "picked_up_by": "Collected by",

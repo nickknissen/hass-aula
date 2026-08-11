@@ -36,7 +36,7 @@ Arriving there as a pull request would have meant replacing almost all of the ex
 
 - Home Assistant **2026.1** or newer
 - An [Aula](https://www.aula.dk) account with children registered
-- A Danish **MitID** account and the MitID app installed on your phone
+- A Danish **MitID** account, with either the MitID app on your phone or a MitID code display (kodeviser)
 
 ---
 
@@ -65,13 +65,23 @@ The integration is configured entirely through the UI — no YAML required.
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **Aula**
-3. Enter your **MitID username**
+3. Enter your **MitID username** and pick a login method
+
+**MitID app**
+
 4. A QR code will appear on screen — scan it with the **MitID app** on your phone
 5. Approve the login on your phone, then click **Submit** in Home Assistant
 
+**MitID code display (kodeviser)**
+
+4. Enter your **MitID password** and the 6 digits shown on your code display
+5. Read the code right before you submit, since it expires quickly
+
+The password and the code are used for that one login only. Neither is stored in Home Assistant.
+
 Once authenticated, the integration discovers all children on your account and creates a device for each one.
 
-> If your session expires, Home Assistant will notify you and prompt you to re-authenticate via the same QR code flow.
+> If your session expires, Home Assistant will notify you and prompt you to re-authenticate with the same method you chose at setup.
 
 ---
 
