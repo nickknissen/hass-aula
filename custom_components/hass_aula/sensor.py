@@ -524,6 +524,9 @@ class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
                     "title": a.title,
                     "start": a.start,
                     "end": a.end,
+                    # EasyIQ's class or team for the lesson, e.g. "6A". Empty
+                    # for sources that do not carry one.
+                    "class_name": a.activities,
                 }
                 for a in data.weekplan[:MAX_ATTRIBUTE_ITEMS]
             ],
@@ -572,6 +575,8 @@ class AulaEasyIQHomeworkSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
                     "subject": h.subject,
                     "due_date": h.due_date,
                     "is_completed": h.is_completed,
+                    # The class or team the assignment was set for, e.g. "6A".
+                    "class_name": h.activities,
                 }
                 for h in data.homework[:MAX_ATTRIBUTE_ITEMS]
             ],

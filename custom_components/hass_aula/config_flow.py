@@ -31,6 +31,8 @@ from .const import (
     CONF_TOKEN_CODE,
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
+    CONFIG_ENTRY_MINOR_VERSION,
+    CONFIG_ENTRY_VERSION,
     DOMAIN,
     LOGGER,
     SUPPORTED_WIDGETS,
@@ -71,7 +73,8 @@ def _token_error_code(err: BaseException | None) -> str:
 class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Aula."""
 
-    VERSION = 1
+    VERSION = CONFIG_ENTRY_VERSION
+    MINOR_VERSION = CONFIG_ENTRY_MINOR_VERSION
 
     def __init__(self) -> None:
         """Initialize the config flow."""

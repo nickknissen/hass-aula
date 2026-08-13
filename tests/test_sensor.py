@@ -12,7 +12,8 @@ from homeassistant.core import HomeAssistant
 from custom_components.hass_aula.const import (
     MAX_MESSAGE_ITEMS,
     WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
     WIDGET_MIN_UDDANNELSE_TASKS,
@@ -515,7 +516,9 @@ async def test_easyiq_weekplan_sensor(
     mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[appt])
     mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
 
-    entry = make_widget_config_entry(widgets=[WIDGET_EASYIQ])
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -537,7 +540,9 @@ async def test_easyiq_homework_sensor(
     mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[])
     mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[hw1, hw2])
 
-    entry = make_widget_config_entry(widgets=[WIDGET_EASYIQ])
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()

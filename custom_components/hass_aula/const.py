@@ -7,7 +7,6 @@ from logging import Logger, getLogger
 from aula import ActivityType
 from aula.const import (
     WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
@@ -29,6 +28,11 @@ CONF_MITID_USERNAME = "mitid_username"
 CONF_TOKEN_CODE = "token_code"  # noqa: S105
 CONF_TOKEN_DATA = "token_data"  # noqa: S105
 CONF_WIDGETS = "widgets"
+
+# Config entry schema version. Minor 2 replaced the combined EasyIQ widget ID
+# with the weekly plan and homework IDs; see LEGACY_WIDGET_EASYIQ.
+CONFIG_ENTRY_VERSION = 1
+CONFIG_ENTRY_MINOR_VERSION = 2
 
 # MitID authenticators this integration can drive. "app" approves the login in
 # the MitID app; "token" reads a one-time code off a MitID kodeviser (code
@@ -95,10 +99,15 @@ HUSKELISTEN_POLL_INTERVAL = 1800  # 30 minutes
 MAX_MESSAGE_ITEMS = 5
 MAX_PREVIEW_CHARS = 200
 
+# aula <= 1.5.0 carried a single combined EasyIQ widget under this ID, which
+# 1.6.0 dropped: Aula itself lists the weekly plan (0128) and homework (0142)
+# as separate widgets. Entries stored before then are migrated onto the two
+# real IDs, so this exists only for that migration.
+LEGACY_WIDGET_EASYIQ = "0001"
+
 SUPPORTED_WIDGETS: frozenset[str] = frozenset(
     {
         WIDGET_BIBLIOTEKET,
-        WIDGET_EASYIQ,
         WIDGET_EASYIQ_HOMEWORK,
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,

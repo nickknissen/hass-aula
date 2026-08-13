@@ -446,6 +446,34 @@ async def test_easyiq_coordinator_fetch(hass: HomeAssistant) -> None:
     assert data[1].homework[0] is hw
 
 
+async def test_easyiq_coordinator_passes_portal_identifiers(
+    hass: HomeAssistant,
+) -> None:
+    """Test EasyIQ calls carry the identifiers the school portal requires."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[])
+    client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator._async_update_data()
+
+    for call in (
+        client.widgets.get_easyiq_weekplan.call_args,
+        client.widgets.get_easyiq_homework.call_args,
+    ):
+        # The child's UniLogin identifies the child, their institution profile
+        # ID identifies the row owner, and the portal filters on every child.
+        assert call.kwargs["child_id"] == "1000"
+        assert call.kwargs["child_profile_id"] == "1"
+        assert call.kwargs["all_child_user_ids"] == ["1000"]
+
+
 async def test_easyiq_coordinator_auth_error(hass: HomeAssistant) -> None:
     """Test EasyIQ coordinator raises ConfigEntryAuthFailed on auth error."""
     client = AsyncMock()

@@ -320,6 +320,7 @@ def mock_appointment(
     title: str = "Science Class",
     start: str = "2024-01-15T09:00:00",
     end: str = "2024-01-15T10:00:00",
+    activities: str = "6A",
 ) -> MagicMock:
     """Create a mock Appointment object."""
     appt = MagicMock(spec=Appointment)
@@ -328,6 +329,7 @@ def mock_appointment(
     appt.start = start
     appt.end = end
     appt.description = ""
+    appt.activities = activities
     appt.item_type = None
     return appt
 
@@ -338,6 +340,7 @@ def mock_easyiq_homework(
     subject: str = "English",
     due_date: str = "2024-02-01",
     is_completed: bool = False,
+    activities: str = "6A",
 ) -> MagicMock:
     """Create a mock EasyIQHomework object."""
     hw = MagicMock(spec=EasyIQHomework)
@@ -346,6 +349,7 @@ def mock_easyiq_homework(
     hw.description = ""
     hw.due_date = due_date
     hw.subject = subject
+    hw.activities = activities
     hw.is_completed = is_completed
     return hw
 
