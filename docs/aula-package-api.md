@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.4.0`
+> **Package:** `aula==1.6.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-08-10
+> **Last updated:** 2026-08-13
 
 ---
 
@@ -76,7 +76,7 @@ Supports `async with` context manager.
 | `get_presence_states` | `async get_presence_states(institution_profile_ids: list[int] \| None = None) -> list[ChildPresenceState]` | Fetch current presence states for children |
 | `get_presence_configuration` | `async get_presence_configuration(child_ids: list[int]) -> list[PresenceConfiguration]` | Fetch presence configuration (pickup rules, etc.) by child IDs |
 | `get_activity_overview` | `async get_activity_overview(institution_profile_ids: list[int], week: int, year: int) -> PresenceWeekOverview \| None` | Fetch activity/week overview for presence (employee-only) |
-| `get_vacation_registrations` | `async get_vacation_registrations(institution_profile_ids: list[int]) -> list[VacationRegistration]` | Fetch vacation registrations for given institution profile IDs |
+| `get_vacation_registrations` | `async get_vacation_registrations(child_ids: list[int]) -> list[VacationRegistration]` | Fetch vacation registrations for the given children (`Child.id`; a guardian's own or a child's user profile ID is rejected) |
 
 ### Notifications
 
@@ -208,12 +208,42 @@ AulaWidgetsClient(api_client: _WidgetRequestClient) -> None
 |--------|-----------|-------------|
 | `get_mu_tasks` | `async get_mu_tasks(widget_id: str, child_filter: list[str], institution_filter: list[str], week: str, session_uuid: str) -> list[MUTask]` | Fetch Min Uddannelse tasks for a given week |
 | `get_ugeplan` | `async get_ugeplan(widget_id: str, child_filter: list[str], institution_filter: list[str], week: str, session_uuid: str) -> list[MUWeeklyPerson]` | Fetch Min Uddannelse weekly plans (ugebreve) |
-| `get_easyiq_weekplan` | `async get_easyiq_weekplan(week: str, session_uuid: str, institution_filter: list[str], child_id: str, widget_id: str = WIDGET_EASYIQ) -> list[Appointment]` | Fetch EasyIQ weekly plan appointments |
-| `get_easyiq_homework` | `async get_easyiq_homework(week: str, session_uuid: str, institution_filter: list[str], child_id: str) -> list[EasyIQHomework]` | Fetch EasyIQ homework assignments |
+| `get_easyiq_weekplan` | `async get_easyiq_weekplan(week: str, session_uuid: str, institution_filter: list[str], child_id: str, widget_id: str = WIDGET_EASYIQ_WEEKPLAN, *, child_profile_id: str \| None = None, all_child_user_ids: list[str] \| None = None) -> list[Appointment]` | Fetch EasyIQ weekly plan appointments, falling back to the school portal |
+| `get_easyiq_homework` | `async get_easyiq_homework(week: str, session_uuid: str, institution_filter: list[str], child_id: str, *, child_profile_id: str, all_child_user_ids: list[str] \| None = None) -> list[EasyIQHomework]` | Fetch EasyIQ homework assignments from the school portal |
+| `get_easyiq_calendar_events` | `async get_easyiq_calendar_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_WEEKPLAN) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ weekly-plan rows |
+| `get_easyiq_homework_events` | `async get_easyiq_homework_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_HOMEWORK) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ homework rows |
+| `ensure_easyiq_session` | `async ensure_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str]) -> None` | Bootstrap the EasyIQ portal session and learn its child IDs (best-effort, idempotent, safe to await concurrently) |
+| `resolve_easyiq_child_id` | `resolve_easyiq_child_id(child_user_id: str) -> str \| None` | EasyIQ's own ID for a child, once the session has been made |
+| `easyiq_headers` | `easyiq_headers(token: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "") -> dict[str, str]` | Headers the EasyIQ portal expects from its embedded widgets |
+| `easyiq_identifier_variants` | `easyiq_identifier_variants(child_profile_id: str, child_user_id: str, guardian_login: str, easyiq_child_id: str \| None = None) -> list[tuple[str, str]]` | `(loginId, child header)` pairs to try, best guess first |
 | `get_meebook_weekplan` | `async get_meebook_weekplan(child_filter: list[str], institution_filter: list[str], week: str, session_uuid: str) -> list[MeebookStudentPlan]` | Fetch Meebook weekly plan |
 | `get_momo_courses` | `async get_momo_courses(children: list[str], institutions: list[str], session_uuid: str) -> list[MomoUserCourses]` | Fetch MoMo courses (widget v1.3) |
 | `get_momo_reminders` | `async get_momo_reminders(children: list[str], institutions: list[str], session_uuid: str, from_date: str, due_no_later_than: str) -> list[UserReminders]` | Fetch MoMo reminders (widget v1.10) |
 | `get_library_status` | `async get_library_status(widget_id: str, children: list[str], institutions: list[str], session_uuid: str) -> LibraryStatus` | Fetch library status from Cicero (widget v1.6) |
+
+### EasyIQ and the school portal
+
+EasyIQ no longer serves homework or weekly plans from the Aula REST API —
+`/api/aula/homeworkinfo` was removed upstream and 404s. Both now come from the
+EasyIQ school portal (`EASYIQ_PORTAL`), which needs its own session and its own
+child identifiers:
+
+- `ensure_easyiq_session` POSTs to `/Aula/AuthenticateAulaUser` for the session
+  cookies, then reads `/Aula/GetChildren` for EasyIQ's own per-child ID. It runs
+  at most once per client and is called automatically by the fetch methods.
+- The portal identifies a child by their **institution profile ID**
+  (`child_profile_id`, i.e. `Child.id`) alongside their **UniLogin**
+  (`child_id` / `child_user_id`, i.e. `Child._raw["userId"]`).
+- `all_child_user_ids` is every child's UniLogin, sent as the `x-childfilter`
+  header. Omitting it makes the portal answer 200 with nothing.
+- Weekly plans and homework live on **separate controllers**; the calendar one
+  never returns homework rows.
+- When the bootstrap fails, `easyiq_identifier_variants` falls back to trying
+  the Aula-derived identifier combinations in turn.
+
+`get_easyiq_weekplan` still tries the old `weekplaninfo` API first and only
+falls back to the portal when that fails or returns nothing — and it can only
+fall back if `child_profile_id` was supplied.
 
 ---
 
@@ -479,14 +509,24 @@ class SecureDocument(AulaDataClass):
 ```python
 @dataclass
 class VacationRegistration(AulaDataClass):
-    id: int
+    id: int                              # vacationRegistrationId
+    child_id: int = 0
     child_name: str = ""
-    institution_profile_id: int = 0
+    title: str = ""
     start_date: str | None = None
     end_date: str | None = None
-    status: str = ""
-    vacation_type: str = ""
+    response_id: int = 0
+    response_deadline: str | None = None
+    note_to_guardian: str = ""
+    is_editable: bool = False
+    is_missing_answer: bool = False
+    is_presence_times_required: bool = False
 ```
+
+Aula returns these grouped by child from
+`presence.getVacationRegistrationsByChildren`; each row is flattened so the
+child it belongs to travels with the registration. `from_dict` therefore takes
+a second argument: `from_dict(data: dict, child: dict | None = None)`.
 
 ### ProfileReference
 
@@ -551,8 +591,11 @@ class Appointment(AulaDataClass):
     start: str = ""
     end: str = ""
     description: str = ""
+    activities: str = ""      # EasyIQ ActivitiesDisplay: class or team, e.g. "6A"
     item_type: int | None = None
 ```
+
+`activities` is empty for sources that do not carry a class or team.
 
 ### EasyIQHomework
 
@@ -564,8 +607,41 @@ class EasyIQHomework(AulaDataClass):
     description: str = ""
     due_date: str = ""
     subject: str = ""
+    activities: str = ""      # class or team the assignment was set for
     is_completed: bool = False
 ```
+
+Besides `from_dict`, it has `from_calendar_event(event: EasyIQCalendarEvent) -> EasyIQHomework`,
+used for portal rows. The portal carries no completion flag, so rows built that
+way always have `is_completed=False`.
+
+### EasyIQCalendarEvent
+
+One raw row from an EasyIQ portal week controller. A single request returns the
+whole week for a child — lessons, calendar entries and homework interleaved,
+told apart by `item_type`.
+
+```python
+@dataclass
+class EasyIQCalendarEvent(AulaDataClass):
+    item_type: int | None = None
+    event_id: str = ""
+    start: str = ""           # normalised to ISO 8601
+    end: str = ""             # normalised to ISO 8601
+    courses: str = ""
+    activities: str = ""
+    description: str = ""
+
+    @property
+    def title(self) -> str:   # courses or activities; empty when neither
+```
+
+`from_dict` matches keys **case-insensitively**: the calendar controller answers
+in camelCase (`itemType`) and the homework controller in PascalCase (`ItemType`).
+Text fields are HTML-unescaped, and timestamps are normalised to ISO 8601 —
+a row can carry `StartTimeISO` but leave `EndTimeISO` null, so the two ends of
+one event otherwise arrive in different formats. Unparsable values pass through
+untouched rather than being dropped.
 
 ### MUTask
 
@@ -943,12 +1019,22 @@ SYSTEMATIC_API = "https://systematic-momo.dk/api/aula"
 EASYIQ_API = "https://api.easyiqcloud.dk/api/aula"
 MEEBOOK_API = "https://app.meebook.com/aulaapi"
 CICERO_API = "https://surf.cicero-suite.com/portal-api/rest/aula"
+
+# EasyIQ school portal — homework and weekly plans come from here, not from
+# the Aula REST API. The two data types live on separate controllers.
+EASYIQ_PORTAL = "https://skoleportal.easyiqcloud.dk"
+EASYIQ_CALENDAR_PATH = "/Calendar/CalendarGetWeekplanEvents"
+EASYIQ_HOMEWORK_PATH = "/AulaHuskeliste/GetWeekplanEvents"
+EASYIQ_CHILDREN_PATH = "/Aula/GetChildren"
+EASYIQ_AUTHENTICATE_PATH = "/Aula/AuthenticateAulaUser"
 ```
 
 ### Widget IDs
 
+`WIDGET_EASYIQ = "0001"`, the combined EasyIQ ID, was **removed in 1.6.0** —
+Aula lists the weekly plan and homework as separate widgets.
+
 ```python
-WIDGET_EASYIQ = "0001"
 WIDGET_EASYIQ_WEEKPLAN = "0128"
 WIDGET_EASYIQ_HOMEWORK = "0142"
 WIDGET_BIBLIOTEKET = "0019"
@@ -975,6 +1061,21 @@ OAUTH_SCOPE = "aula-sensitive"
 CSRF_TOKEN_COOKIE = "Csrfp-Token"      # Cookie name (PascalCase)
 CSRF_TOKEN_HEADER = "csrfp-token"      # Header name (lowercase)
 ```
+
+### EasyIQ item types
+
+Exported from `aula.models`. EasyIQ tags every portal row with an `itemType`;
+its own widget source names them: 1 OpgaveFraForløb, 2 LektieFraForløb, 3 Event,
+4 Lektie, 5 Plan, 6 Holiday, 7 TimeTableEvent, 8 VigtigInformation, 9 Ugeplan,
+10 ClassroomStart, 11 ArbejdeFraForløb.
+
+```python
+WEEKPLAN_ITEM_TYPES = (8, 9)
+HOMEWORK_ITEM_TYPES = (1, 2, 3, 4, 8)
+```
+
+Homework includes work set as part of a course, not only a bare `Lektie`. The
+two overlap on 8 because both views show important notices.
 
 ### Other
 
@@ -1101,6 +1202,7 @@ class MitIDAuthClient:
         auth_method: str = "app",
         on_token_digits: Callable | None = None,
         on_password: Callable | None = None,
+        on_otp_code: Callable[[str], None] | None = None,
     ) -> None: ...
 
     async def authenticate(self) -> dict[str, Any]:
@@ -1207,6 +1309,24 @@ Most widget methods share a common parameter pattern:
 - `week: str` — ISO week string (e.g. `"2024-W10"`)
 - `session_uuid: str` — Unique session identifier
 
+EasyIQ's portal methods need more than this — see
+[EasyIQ and the school portal](#easyiq-and-the-school-portal). In particular
+`session_uuid` doubles as the portal's `guardian_login`, which is the guardian's
+UniLogin: `(await client.get_profile_context())["data"]["userId"]`.
+
+### Reading nested API values
+
+Aula sends an explicit `null` for objects it leaves empty, so `data.get("x", {}).get("y")`
+raises on a present-but-null `x`. Use `get_in` instead:
+
+```python
+from aula.utils.mapping import get_in
+
+get_in(child._raw, "institutionProfile.institutionCode", default="")
+```
+
+A missing key, a null value, and an unexpected shape all yield `default`.
+
 ### CLI JSON Output
 
 All CLI commands support `--output json` (or `AULA_OUTPUT=json` env var) to emit machine-readable JSON instead of human-readable text. When active, each command serializes its result via `to_json()` (handles `datetime`, `enum`, and `AulaDataClass` instances) and prints a single JSON document to stdout.
@@ -1291,7 +1411,7 @@ Constants:
 
 ```python
 from aula.const import (
-    WIDGET_EASYIQ, WIDGET_BIBLIOTEKET, WIDGET_MIN_UDDANNELSE_TASKS,
-    WIDGET_MEEBOOK, WIDGET_HUSKELISTEN, ...
+    WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK, WIDGET_BIBLIOTEKET,
+    WIDGET_MIN_UDDANNELSE_TASKS, WIDGET_MEEBOOK, WIDGET_HUSKELISTEN, ...
 )
 ```
