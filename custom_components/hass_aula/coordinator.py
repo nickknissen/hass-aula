@@ -640,6 +640,9 @@ class AulaEasyIQCoordinator(
                 inst_code = self.widget_context.institution_filter[0]
             inst_filter = [inst_code]
 
+            # EasyIQ serves both views from its school portal, which needs the
+            # child's institution profile ID alongside their UniLogin, plus
+            # every child's UniLogin as the portal's child filter.
             weekplan, homework = await asyncio.gather(
                 self.client.widgets.get_easyiq_weekplan(
                     week=week,
@@ -647,12 +650,16 @@ class AulaEasyIQCoordinator(
                     institution_filter=inst_filter,
                     child_id=child_id_str,
                     widget_id=WIDGET_EASYIQ_WEEKPLAN,
+                    child_profile_id=str(child.id),
+                    all_child_user_ids=self.widget_context.child_filter,
                 ),
                 self.client.widgets.get_easyiq_homework(
                     week=week,
                     session_uuid=self.widget_context.session_uuid,
                     institution_filter=inst_filter,
                     child_id=child_id_str,
+                    child_profile_id=str(child.id),
+                    all_child_user_ids=self.widget_context.child_filter,
                 ),
             )
             return child.id, EasyIQChildData(weekplan=weekplan, homework=homework)

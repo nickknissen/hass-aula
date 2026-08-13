@@ -9,9 +9,23 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from custom_components.hass_aula.const import DOMAIN
+from custom_components.hass_aula.const import (
+    CONF_WIDGETS,
+    CONFIG_ENTRY_MINOR_VERSION,
+    DOMAIN,
+    LEGACY_WIDGET_EASYIQ,
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_MEEBOOK,
+)
 
-from .conftest import make_config_entry, mock_child, mock_profile
+from .conftest import (
+    make_config_entry,
+    make_widget_config_entry,
+    mock_child,
+    mock_profile,
+)
 
 
 def _make_refreshed_client() -> AsyncMock:
@@ -241,3 +255,44 @@ async def test_stale_device_removal(
             if (DOMAIN, "2") in d.identifiers
         ]
         assert len(devices) == 0
+
+
+async def test_migrate_combined_easyiq_widget(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test the retired combined EasyIQ ID becomes the weekplan and homework IDs."""
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_BIBLIOTEKET, LEGACY_WIDGET_EASYIQ],
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.minor_version == CONFIG_ENTRY_MINOR_VERSION
+    assert set(entry.data[CONF_WIDGETS]) == {
+        WIDGET_BIBLIOTEKET,
+        WIDGET_EASYIQ_WEEKPLAN,
+        WIDGET_EASYIQ_HOMEWORK,
+    }
+    # Both EasyIQ views must still be served after the migration.
+    assert entry.runtime_data.easyiq_coordinator is not None
+
+
+async def test_migrate_leaves_other_widgets_alone(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test migration only bumps the version when no legacy EasyIQ ID is stored."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK], minor_version=1)
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.minor_version == CONFIG_ENTRY_MINOR_VERSION
+    assert entry.data[CONF_WIDGETS] == [WIDGET_MEEBOOK]
+    assert entry.runtime_data.easyiq_coordinator is None
