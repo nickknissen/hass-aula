@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.6.0`
+> **Package:** `aula==1.7.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-08-13
+> **Last updated:** 2026-08-14
 
 ---
 
@@ -77,6 +77,17 @@ Supports `async with` context manager.
 | `get_presence_configuration` | `async get_presence_configuration(child_ids: list[int]) -> list[PresenceConfiguration]` | Fetch presence configuration (pickup rules, etc.) by child IDs |
 | `get_activity_overview` | `async get_activity_overview(institution_profile_ids: list[int], week: int, year: int) -> PresenceWeekOverview \| None` | Fetch activity/week overview for presence (employee-only) |
 | `get_vacation_registrations` | `async get_vacation_registrations(child_ids: list[int]) -> list[VacationRegistration]` | Fetch vacation registrations for the given children (`Child.id`; a guardian's own or a child's user profile ID is rejected) |
+| `update_presence_status` | `async update_presence_status(institution_profile_ids: list[int], status: PresenceState \| int) -> bool` | Set today's presence status, e.g. report a child sick; returns True if Aula accepted |
+
+`update_presence_status` is the endpoint behind the portal's sick button —
+reporting a child ill and taking the report back are the same call with a
+different status. It always applies to **today**; Aula has no future-dated sick
+report, so use `update_presence_template` or a vacation registration for a
+planned absence. Taking a report back means sending `PresenceState.NOT_PRESENT`
+(what the guardian dashboard sends) or `PresenceState.PRESENT` (what the
+presence page sends) — pick whichever matches the child's real situation. An
+institution can withhold this from guardians; `get_presence_configuration`
+reports that up front via `PresenceConfiguration.can_edit(PresenceModule.REPORT_SICK)`.
 
 ### Notifications
 
@@ -303,7 +314,7 @@ class DailyOverview(AulaDataClass):
     institution_profile: InstitutionProfile | None = None
     main_group: MainGroup | None = None
     status: PresenceState | None = None
-    location: str | None = None
+    location: PresenceLocation | None = None   # object since 1.7.0, was str
     sleep_intervals: list[SleepInterval] = []     # SleepInterval = dict[str, str]
     check_in_time: str | None = None
     check_out_time: str | None = None
@@ -312,6 +323,26 @@ class DailyOverview(AulaDataClass):
     exit_with: str | None = None
     comment: str | None = None
 ```
+
+### PresenceLocation
+
+Where a child physically is. **New in 1.7.0** — `DailyOverview.location` was a
+plain `str` before, so anything publishing it directly (a Home Assistant state
+attribute, a JSON dump) needs `.name` now.
+
+```python
+@dataclass
+class PresenceLocation(AulaDataClass):
+    id: int | None = None
+    name: str = ""
+    description: str = ""
+    symbol: str = ""
+```
+
+Aula sends this as an object; the live payload carries more keys than the four
+the official client reads, and the rest stay in `_raw`. Use
+`PresenceLocation.parse(value)` rather than `from_dict` when the value may be
+absent — it returns `None` for `null` and accepts a bare string as the name.
 
 ### InstitutionProfile
 
@@ -657,7 +688,8 @@ class MUTask(AulaDataClass):
     is_completed: bool
     student_name: str
     unilogin: str
-    url: str
+    url: str                                   # SSO entry point, not navigable
+    deep_link: str | None = None               # the real MinUddannelse page URL
     classes: list[MUTaskClass] = []
     course: MUTaskCourse | None = None
     student_count: int | None = None
@@ -970,6 +1002,40 @@ How a child leaves at the end of the day. Accepted by `update_presence_template`
 `requires_exit_with` is `True` for `PICKED_UP_BY` and `GO_HOME_WITH`; both need a
 name in `exit_with`, including the relation as Aula shows it (`"Nick Nissen (Far)"`).
 
+### PresenceModule
+
+**New in 1.7.0.** A Komme/gå feature an institution can switch on or off per
+child. Pair with `PresenceConfiguration.can_edit(module)` to find out whether a
+call will be accepted before making it.
+
+```python
+PICKUP_TIMES = "pickup_times"              VACATION = "vacation"
+DROP_OFF_TIME = "drop_off_time"            FIELD_TRIP = "field_trip"
+DAILY_MESSAGE = "daily_message"            SPARE_TIME_ACTIVITY = "spare_time_activity"
+REPORT_SICK = "report_sick"                LOCATION = "location"
+SLEEP = "sleep"                            PICKUP_TYPE = "pickup_type"
+```
+
+### PresenceModulePermission
+
+**New in 1.7.0.** What the signed-in role may do with a `PresenceModule`.
+
+```python
+DEACTIVATED = "deactivated"
+READABLE = "readable"
+EDITABLE = "editable"
+```
+
+### PresenceDashboard
+
+**New in 1.7.0.** Which dashboard a set of module permissions applies to.
+
+```python
+GUARDIAN = "guardian_dashboard"
+EMPLOYEE = "employee_dashboard"
+CHECK_IN = "check_in_dashboard"
+```
+
 ---
 
 ## Exceptions
@@ -1040,6 +1106,12 @@ WIDGET_EASYIQ_HOMEWORK = "0142"
 WIDGET_BIBLIOTEKET = "0019"
 WIDGET_MIN_UDDANNELSE_UGEPLAN = "0029"
 WIDGET_MIN_UDDANNELSE_TASKS = "0030"
+WIDGET_MIN_UDDANNELSE_SSO = "0023"
+
+# Widgets that can mint a token for MinUddannelse's opgaveliste, in preference
+# order. Not every school lists 0030, and one that has only the SSO widget still
+# has opgaver — a 0023 token is accepted by the same endpoint, same parameters.
+MIN_UDDANNELSE_TASK_WIDGETS = (WIDGET_MIN_UDDANNELSE_TASKS, WIDGET_MIN_UDDANNELSE_SSO)
 WIDGET_MEEBOOK = "0004"
 WIDGET_HUSKELISTEN = "0062"
 ```
