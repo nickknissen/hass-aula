@@ -186,7 +186,11 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
             "exit_with": overview.exit_with,
             "self_decider_start_time": child_data.self_decider_start,
             "self_decider_end_time": child_data.self_decider_end,
-            "location": overview.location,
+            # aula 1.7.0 turned this into a PresenceLocation object, which is
+            # not JSON-serializable and so cannot go in a state attribute.
+            # Keep publishing the name, which is what this attribute has always
+            # held and what existing dashboards and automations read.
+            "location": overview.location.name if overview.location else None,
         }
 
 

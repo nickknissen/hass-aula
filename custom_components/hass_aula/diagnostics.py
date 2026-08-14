@@ -36,7 +36,7 @@ async def async_get_config_entry_diagnostics(
         else:
             presence_data[str(child_id)] = {
                 "status": overview.status.name if overview.status else None,
-                "location": overview.location,
+                "location": overview.location.name if overview.location else None,
                 "check_in_time": str(overview.check_in_time)
                 if overview.check_in_time
                 else None,

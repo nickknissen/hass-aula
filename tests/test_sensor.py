@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 from aula.models.presence import PresenceState
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.json import JSONEncoder
 
 from custom_components.hass_aula.const import (
     MAX_MESSAGE_ITEMS,
@@ -136,7 +138,11 @@ async def test_presence_sensor_attributes(
     assert state.attributes["exit_with"] == "Parent"
     assert state.attributes["self_decider_start_time"] == "14:00"
     assert state.attributes["self_decider_end_time"] == "16:30"
+    # aula delivers this as a PresenceLocation; the attribute stays the name.
     assert state.attributes["location"] == "Room 1"
+    # The recorder and the websocket API both JSON-encode state attributes, so
+    # publishing the object itself breaks them rather than the assertion above.
+    json.dumps(dict(state.attributes), cls=JSONEncoder)
 
 
 async def test_sensor_unavailable_when_no_overview(

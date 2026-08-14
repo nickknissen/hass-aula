@@ -24,6 +24,7 @@ from aula.models.mu_weekly_letter import (
 )
 from aula.models.notification import Notification
 from aula.models.presence import PresenceState
+from aula.models.presence_location import PresenceLocation
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -127,7 +128,15 @@ def mock_daily_overview(
     exit_with: str | None = None,
     location: str | None = None,
 ) -> MagicMock:
-    """Create a mock DailyOverview object."""
+    """
+    Create a mock DailyOverview object.
+
+    ``location`` is given as a name for convenience, but is stored the way the
+    aula package delivers it since 1.7.0: a ``PresenceLocation`` object, not a
+    string. Storing a bare string here would hide the fact that a caller
+    putting it straight into a state attribute is publishing something that
+    cannot be serialized.
+    """
     overview = MagicMock(spec=DailyOverview)
     overview.status = status
     overview.check_in_time = check_in_time or datetime(2024, 1, 15, 8, 0, tzinfo=UTC)
@@ -135,7 +144,7 @@ def mock_daily_overview(
     overview.entry_time = entry_time
     overview.exit_time = exit_time
     overview.exit_with = exit_with
-    overview.location = location
+    overview.location = PresenceLocation(name=location) if location else None
     return overview
 
 

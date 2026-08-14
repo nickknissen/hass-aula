@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.json import JSONEncoder
 
 from custom_components.hass_aula.diagnostics import async_get_config_entry_diagnostics
 
-from .conftest import make_config_entry
+from .conftest import make_config_entry, mock_daily_overview
 
 
 async def test_diagnostics_redacts_pii(
@@ -52,6 +54,10 @@ async def test_diagnostics_presence_data(
     mock_aula_client: AsyncMock,
 ) -> None:
     """Test diagnostics includes presence data."""
+    mock_aula_client.get_daily_overview = AsyncMock(
+        return_value=mock_daily_overview(location="Room 1")
+    )
+
     entry = make_config_entry()
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
@@ -63,6 +69,10 @@ async def test_diagnostics_presence_data(
     presence = result["presence"]["1"]
     assert "status" in presence
     assert "check_in_time" in presence
+    # aula delivers this as a PresenceLocation, which cannot be JSON-encoded;
+    # diagnostics are downloaded as JSON, so the name is what goes in.
+    assert presence["location"] == "Room 1"
+    json.dumps(result, cls=JSONEncoder)
 
 
 async def test_diagnostics_calendar_counts(
