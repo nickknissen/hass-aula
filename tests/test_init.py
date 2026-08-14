@@ -18,6 +18,8 @@ from custom_components.hass_aula.const import (
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_SSO,
+    WIDGET_MIN_UDDANNELSE_TASKS,
 )
 
 from .conftest import (
@@ -296,3 +298,53 @@ async def test_migrate_leaves_other_widgets_alone(
     assert entry.minor_version == CONFIG_ENTRY_MINOR_VERSION
     assert entry.data[CONF_WIDGETS] == [WIDGET_MEEBOOK]
     assert entry.runtime_data.easyiq_coordinator is None
+
+
+async def test_mu_tasks_enabled_by_the_sso_widget_alone(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test a school listing only the SSO widget still gets MU tasks."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_SSO])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.mu_tasks_coordinator
+    assert coordinator is not None
+    assert coordinator.widget_id == WIDGET_MIN_UDDANNELSE_SSO
+
+
+async def test_mu_tasks_prefers_the_opgaver_widget(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test the opgaver widget wins when the account lists both."""
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_MIN_UDDANNELSE_SSO, WIDGET_MIN_UDDANNELSE_TASKS]
+    )
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.mu_tasks_coordinator
+    assert coordinator is not None
+    # Order comes from the widget list, not from what the user happened to
+    # select first, so the endpoint's own widget leads.
+    assert coordinator.widget_id == WIDGET_MIN_UDDANNELSE_TASKS
+
+
+async def test_mu_tasks_absent_without_either_widget(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test no MU tasks coordinator when neither widget is on the account."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.mu_tasks_coordinator is None

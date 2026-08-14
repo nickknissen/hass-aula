@@ -6,11 +6,13 @@ from logging import Logger, getLogger
 
 from aula import ActivityType
 from aula.const import (
+    MIN_UDDANNELSE_TASK_WIDGETS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
@@ -105,6 +107,11 @@ MAX_PREVIEW_CHARS = 200
 # real IDs, so this exists only for that migration.
 LEGACY_WIDGET_EASYIQ = "0001"
 
+# Widgets whose token is accepted by the MinUddannelse opgaveliste endpoint,
+# preferred first. Re-exported from the aula package so the fallback order and
+# the set of widgets we offer stay in step.
+MU_TASK_WIDGETS: tuple[str, ...] = MIN_UDDANNELSE_TASK_WIDGETS
+
 SUPPORTED_WIDGETS: frozenset[str] = frozenset(
     {
         WIDGET_BIBLIOTEKET,
@@ -112,6 +119,7 @@ SUPPORTED_WIDGETS: frozenset[str] = frozenset(
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,
         WIDGET_MEEBOOK,
+        WIDGET_MIN_UDDANNELSE_SSO,
         WIDGET_MIN_UDDANNELSE_TASKS,
         WIDGET_MIN_UDDANNELSE_UGEPLAN,
     }

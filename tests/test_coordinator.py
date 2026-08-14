@@ -15,7 +15,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.hass_aula.const import MAX_PREVIEW_CHARS
+from custom_components.hass_aula.const import (
+    MAX_PREVIEW_CHARS,
+    WIDGET_MIN_UDDANNELSE_SSO,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+)
 from custom_components.hass_aula.coordinator import (
     AulaCalendarCoordinator,
     AulaEasyIQCoordinator,
@@ -360,6 +364,31 @@ async def test_library_coordinator_multi_child(hass: HomeAssistant) -> None:
 # --- MU Tasks Coordinator Tests ---
 
 
+async def test_mu_tasks_coordinator_uses_the_given_widget(hass: HomeAssistant) -> None:
+    """Test the coordinator mints its token with the widget it was given."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_mu_tasks = AsyncMock(return_value=[])
+
+    coordinator = AulaMUTasksCoordinator(
+        hass,
+        client,
+        mock_profile(),
+        _create_widget_context(),
+        _create_token_manager(),
+        WIDGET_MIN_UDDANNELSE_SSO,
+    )
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator._async_update_data()
+
+    # A school without the opgaver widget still has opgaver; the endpoint
+    # accepts an SSO token with the same parameters.
+    assert client.widgets.get_mu_tasks.call_args.kwargs["widget_id"] == (
+        WIDGET_MIN_UDDANNELSE_SSO
+    )
+
+
 async def test_mu_tasks_coordinator_fetch(hass: HomeAssistant) -> None:
     """Test MU tasks coordinator fetches and distributes tasks."""
     client = AsyncMock()
@@ -370,7 +399,9 @@ async def test_mu_tasks_coordinator_fetch(hass: HomeAssistant) -> None:
     profile = mock_profile()
     ctx = _create_widget_context()
     tm = _create_token_manager()
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUTasksCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_TASKS
+    )
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -394,7 +425,9 @@ async def test_mu_tasks_coordinator_auth_error(hass: HomeAssistant) -> None:
     tm.async_refresh_and_rebuild_client = AsyncMock(
         side_effect=AulaAuthenticationError("Refresh failed", 0)
     )
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUTasksCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_TASKS
+    )
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -412,7 +445,9 @@ async def test_mu_tasks_coordinator_connection_error(hass: HomeAssistant) -> Non
     profile = mock_profile()
     ctx = _create_widget_context()
     tm = _create_token_manager()
-    coordinator = AulaMUTasksCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUTasksCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_TASKS
+    )
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
