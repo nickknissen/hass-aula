@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 from aula.models.presence import PresenceState
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.json import JSONEncoder
 
 from custom_components.hass_aula.const import (
     MAX_MESSAGE_ITEMS,
     WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
     WIDGET_MIN_UDDANNELSE_TASKS,
@@ -135,7 +138,11 @@ async def test_presence_sensor_attributes(
     assert state.attributes["exit_with"] == "Parent"
     assert state.attributes["self_decider_start_time"] == "14:00"
     assert state.attributes["self_decider_end_time"] == "16:30"
+    # aula delivers this as a PresenceLocation; the attribute stays the name.
     assert state.attributes["location"] == "Room 1"
+    # The recorder and the websocket API both JSON-encode state attributes, so
+    # publishing the object itself breaks them rather than the assertion above.
+    json.dumps(dict(state.attributes), cls=JSONEncoder)
 
 
 async def test_sensor_unavailable_when_no_overview(
@@ -515,7 +522,9 @@ async def test_easyiq_weekplan_sensor(
     mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[appt])
     mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
 
-    entry = make_widget_config_entry(widgets=[WIDGET_EASYIQ])
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -537,7 +546,9 @@ async def test_easyiq_homework_sensor(
     mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[])
     mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[hw1, hw2])
 
-    entry = make_widget_config_entry(widgets=[WIDGET_EASYIQ])
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()

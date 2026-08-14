@@ -186,7 +186,11 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
             "exit_with": overview.exit_with,
             "self_decider_start_time": child_data.self_decider_start,
             "self_decider_end_time": child_data.self_decider_end,
-            "location": overview.location,
+            # aula 1.7.0 turned this into a PresenceLocation object, which is
+            # not JSON-serializable and so cannot go in a state attribute.
+            # Keep publishing the name, which is what this attribute has always
+            # held and what existing dashboards and automations read.
+            "location": overview.location.name if overview.location else None,
         }
 
 
@@ -524,6 +528,9 @@ class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
                     "title": a.title,
                     "start": a.start,
                     "end": a.end,
+                    # EasyIQ's class or team for the lesson, e.g. "6A". Empty
+                    # for sources that do not carry one.
+                    "class_name": a.activities,
                 }
                 for a in data.weekplan[:MAX_ATTRIBUTE_ITEMS]
             ],
@@ -572,6 +579,8 @@ class AulaEasyIQHomeworkSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
                     "subject": h.subject,
                     "due_date": h.due_date,
                     "is_completed": h.is_completed,
+                    # The class or team the assignment was set for, e.g. "6A".
+                    "class_name": h.activities,
                 }
                 for h in data.homework[:MAX_ATTRIBUTE_ITEMS]
             ],

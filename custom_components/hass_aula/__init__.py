@@ -21,15 +21,18 @@ from homeassistant.helpers import device_registry as dr
 from .const import (
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
+    CONFIG_ENTRY_MINOR_VERSION,
     DOMAIN,
+    LEGACY_WIDGET_EASYIQ,
     LOGGER,
+    MU_TASK_WIDGETS,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
+    WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
@@ -64,8 +67,8 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _ALL_WIDGET_IDS = (
     WIDGET_BIBLIOTEKET,
     WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
-    WIDGET_EASYIQ,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_MEEBOOK,
@@ -88,6 +91,21 @@ class _WidgetCoordinators:
 def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
     """Return True if the given widget ID is selected in the config entry."""
     return widget_id in entry.data.get(CONF_WIDGETS, [])
+
+
+def _mu_task_widget_id(entry: AulaConfigEntry) -> str | None:
+    """
+    Return the widget to mint MinUddannelse opgaveliste tokens with.
+
+    Not every school lists the opgaver widget (0030); one that has only the
+    SSO widget (0023) still has opgaver, and a 0023 token is accepted by the
+    same endpoint with the same parameters. Prefer 0030 where both are
+    present, since that is the widget the endpoint belongs to.
+    """
+    return next(
+        (w for w in MU_TASK_WIDGETS if is_widget_enabled(entry, w)),
+        None,
+    )
 
 
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
@@ -155,9 +173,10 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_TASKS):
+    mu_task_widget = _mu_task_widget_id(entry)
+    if mu_task_widget:
         wc.mu_tasks = AulaMUTasksCoordinator(
-            hass, client, profile, widget_context, token_manager
+            hass, client, profile, widget_context, token_manager, mu_task_widget
         )
 
     if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_UGEPLAN):
@@ -165,10 +184,8 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    if (
-        is_widget_enabled(entry, WIDGET_EASYIQ)
-        or is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN)
-        or is_widget_enabled(entry, WIDGET_EASYIQ_HOMEWORK)
+    if is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN) or is_widget_enabled(
+        entry, WIDGET_EASYIQ_HOMEWORK
     ):
         wc.easyiq = AulaEasyIQCoordinator(
             hass, client, profile, widget_context, token_manager
@@ -195,6 +212,35 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     available when no entry is loaded, and can report that as a user error.
     """
     async_setup_services(hass)
+    return True
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant,
+    entry: AulaConfigEntry,
+) -> bool:
+    """Migrate an older config entry to the current schema."""
+    if entry.version == 1 and entry.minor_version < CONFIG_ENTRY_MINOR_VERSION:
+        widgets = list(entry.data.get(CONF_WIDGETS, []))
+        if LEGACY_WIDGET_EASYIQ in widgets:
+            # The combined EasyIQ ID selected both views, so keep both rather
+            # than making the user pick again after the upgrade.
+            widgets = [w for w in widgets if w != LEGACY_WIDGET_EASYIQ]
+            widgets += [
+                w
+                for w in (WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK)
+                if w not in widgets
+            ]
+            LOGGER.info(
+                "Migrated the combined EasyIQ widget to the weekly plan and "
+                "homework widgets"
+            )
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_WIDGETS: widgets},
+            minor_version=CONFIG_ENTRY_MINOR_VERSION,
+        )
+
     return True
 
 

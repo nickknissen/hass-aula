@@ -39,7 +39,6 @@ from .const import (
     PRESENCE_POLL_INTERVAL,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_WEEKPLAN,
-    WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from .data import (
@@ -489,15 +488,23 @@ class AulaMUTasksCoordinator(
 ):
     """Coordinator for fetching Min Uddannelse tasks."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         hass: HomeAssistant,
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
         token_manager: AulaTokenManager,
+        widget_id: str,
     ) -> None:
-        """Initialize the MU tasks coordinator."""
+        """
+        Initialize the MU tasks coordinator.
+
+        ``widget_id`` is the widget whose token mints access to the opgaveliste
+        endpoint; which one the account has is resolved when the coordinators
+        are created.
+        """
+        self.widget_id = widget_id
         super().__init__(
             hass,
             client,
@@ -513,7 +520,7 @@ class AulaMUTasksCoordinator(
         week = dt_util.now().strftime("%G-W%V")
         async with _aula_api_errors(self.token_manager):
             tasks = await self.client.widgets.get_mu_tasks(
-                widget_id=WIDGET_MIN_UDDANNELSE_TASKS,
+                widget_id=self.widget_id,
                 child_filter=self.widget_context.child_filter,
                 institution_filter=self.widget_context.institution_filter,
                 week=week,
@@ -640,6 +647,9 @@ class AulaEasyIQCoordinator(
                 inst_code = self.widget_context.institution_filter[0]
             inst_filter = [inst_code]
 
+            # EasyIQ serves both views from its school portal, which needs the
+            # child's institution profile ID alongside their UniLogin, plus
+            # every child's UniLogin as the portal's child filter.
             weekplan, homework = await asyncio.gather(
                 self.client.widgets.get_easyiq_weekplan(
                     week=week,
@@ -647,12 +657,16 @@ class AulaEasyIQCoordinator(
                     institution_filter=inst_filter,
                     child_id=child_id_str,
                     widget_id=WIDGET_EASYIQ_WEEKPLAN,
+                    child_profile_id=str(child.id),
+                    all_child_user_ids=self.widget_context.child_filter,
                 ),
                 self.client.widgets.get_easyiq_homework(
                     week=week,
                     session_uuid=self.widget_context.session_uuid,
                     institution_filter=inst_filter,
                     child_id=child_id_str,
+                    child_profile_id=str(child.id),
+                    all_child_user_ids=self.widget_context.child_filter,
                 ),
             )
             return child.id, EasyIQChildData(weekplan=weekplan, homework=homework)
