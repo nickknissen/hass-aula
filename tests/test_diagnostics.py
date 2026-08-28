@@ -8,9 +8,15 @@ from unittest.mock import AsyncMock
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import JSONEncoder
 
+from custom_components.hass_aula.const import WIDGET_MEEBOOK
 from custom_components.hass_aula.diagnostics import async_get_config_entry_diagnostics
 
-from .conftest import make_config_entry, mock_daily_overview
+from .conftest import (
+    make_config_entry,
+    make_widget_config_entry,
+    mock_daily_overview,
+    mock_meebook_student_plan,
+)
 
 
 async def test_diagnostics_redacts_pii(
@@ -89,3 +95,26 @@ async def test_diagnostics_calendar_counts(
 
     assert "1" in result["calendar_event_counts"]
     assert isinstance(result["calendar_event_counts"]["1"], int)
+
+
+async def test_diagnostics_meebook_week_counts(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test diagnostics reports separate current and next Meebook counts."""
+    plan = mock_meebook_student_plan(name="Test Child")
+    mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[plan], [plan]]
+    )
+
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert result["widgets"]["meebook"]["1"] == {
+        "current_week": 1,
+        "next_week": 1,
+    }

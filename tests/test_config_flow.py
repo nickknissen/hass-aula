@@ -22,9 +22,17 @@ from custom_components.hass_aula.const import (
     CONF_TOKEN_DATA,
     CONF_WIDGETS,
     DOMAIN,
+    SUPPORTED_WIDGETS,
+    WIDGET_MEEBOOK_OVERVIEW,
 )
 
 from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, make_config_entry
+
+
+def test_meebook_overview_widget_is_supported() -> None:
+    """Test Meebook overblik is offered as a supported data provider."""
+    assert WIDGET_MEEBOOK_OVERVIEW in SUPPORTED_WIDGETS
+
 
 # Patch target for widget fetching (avoids network calls in tests)
 _FETCH_WIDGETS = (

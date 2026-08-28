@@ -112,13 +112,24 @@ LEGACY_WIDGET_EASYIQ = "0001"
 # the set of widgets we offer stay in step.
 MU_TASK_WIDGETS: tuple[str, ...] = MIN_UDDANNELSE_TASK_WIDGETS
 
+# Some Aula accounts advertise Meebook through the alternate "Meebook overblik"
+# widget (0119) instead of the legacy weekplan widget (0004). The Meebook
+# weekplan endpoint still accepts a token minted for 0004, so 0119 is a
+# discovery/enablement alias only; the aula package deliberately keeps using
+# WIDGET_MEEBOOK (0004) when it calls the Meebook API.
+WIDGET_MEEBOOK_OVERVIEW = "0119"
+MEEBOOK_PROVIDER_WIDGETS: tuple[str, ...] = (
+    WIDGET_MEEBOOK,
+    WIDGET_MEEBOOK_OVERVIEW,
+)
+
 SUPPORTED_WIDGETS: frozenset[str] = frozenset(
     {
         WIDGET_BIBLIOTEKET,
         WIDGET_EASYIQ_HOMEWORK,
         WIDGET_EASYIQ_WEEKPLAN,
         WIDGET_HUSKELISTEN,
-        WIDGET_MEEBOOK,
+        *MEEBOOK_PROVIDER_WIDGETS,
         WIDGET_MIN_UDDANNELSE_SSO,
         WIDGET_MIN_UDDANNELSE_TASKS,
         WIDGET_MIN_UDDANNELSE_UGEPLAN,
