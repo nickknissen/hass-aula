@@ -106,6 +106,7 @@ The following entities are created **per child**:
 | `entry_time` | Time the child entered the building |
 | `exit_time` | Time the child exited the building |
 | `location` | Current reported location |
+| `sleep_intervals` | Naps as the institution registered them, e.g. `[{"id": 27707363, "startTime": "12:05:00", "endTime": "13:15:00"}]`. Mostly relevant for daycare. Passed through as delivered, so the keys are whatever the API sends |
 
 **Presence status values:**
 
