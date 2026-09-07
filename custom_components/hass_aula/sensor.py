@@ -29,6 +29,7 @@ from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
     from aula import Child, Profile
+    from aula.models.meebook_weekplan import MeebookTask
     from aula.models.mu_weekly_letter import MUWeeklyLetter
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -603,32 +604,48 @@ class AulaMeebookWeekplanSensor(AulaEntity[AulaMeebookCoordinator], SensorEntity
         self._attr_unique_id = f"{child.id}_meebook_weekplan"
 
     @property
-    def _tasks(self) -> list:
+    def _tasks(self) -> list[MeebookTask]:
         if not self.coordinator.data:
             return []
-        return self.coordinator.data.get(self._child.id, [])
+        return self.coordinator.data.current.get(self._child.id, [])
+
+    @property
+    def _next_week_tasks(self) -> list[MeebookTask]:
+        if not self.coordinator.data:
+            return []
+        return self.coordinator.data.next_week.get(self._child.id, [])
 
     @property
     def native_value(self) -> int:
         """Return the number of tasks this week."""
         return len(self._tasks)
 
+    @staticmethod
+    def _format_tasks(tasks: list[MeebookTask]) -> list[dict[str, Any]]:
+        """Format Meebook tasks for state attributes."""
+        return [
+            {
+                "title": task.title,
+                "type": task.type,
+                "content": task.content,
+            }
+            for task in tasks[:MAX_ATTRIBUTE_ITEMS]
+        ]
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return task details."""
+        """Return task details for current and next week."""
         tasks = self._tasks
-        if not tasks:
+        next_week_tasks = self._next_week_tasks
+        if not tasks and not next_week_tasks:
             return {}
-        return {
-            "tasks": [
-                {
-                    "title": t.title,
-                    "type": t.type,
-                    "content": t.content,
-                }
-                for t in tasks[:MAX_ATTRIBUTE_ITEMS]
-            ],
-        }
+
+        attrs: dict[str, Any] = {}
+        if tasks:
+            attrs["tasks"] = self._format_tasks(tasks)
+        if next_week_tasks:
+            attrs["next_week_tasks"] = self._format_tasks(next_week_tasks)
+        return attrs
 
 
 class AulaHuskelistenSensor(AulaEntity[AulaHuskelistenCoordinator], SensorEntity):

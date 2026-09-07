@@ -18,6 +18,7 @@ from custom_components.hass_aula.const import (
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_MEEBOOK,
+    WIDGET_MEEBOOK_OVERVIEW,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
 )
@@ -298,6 +299,20 @@ async def test_migrate_leaves_other_widgets_alone(
     assert entry.minor_version == CONFIG_ENTRY_MINOR_VERSION
     assert entry.data[CONF_WIDGETS] == [WIDGET_MEEBOOK]
     assert entry.runtime_data.easyiq_coordinator is None
+
+
+async def test_meebook_enabled_by_overview_widget(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test the advertised Meebook overblik widget enables Meebook data."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK_OVERVIEW])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.meebook_coordinator is not None
 
 
 async def test_mu_tasks_enabled_by_the_sso_widget_alone(

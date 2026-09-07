@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aula import (
@@ -43,6 +44,7 @@ from .conftest import (
     mock_library_loan,
     mock_library_status,
     mock_meebook_student_plan,
+    mock_meebook_task,
     mock_message,
     mock_message_thread,
     mock_mu_task,
@@ -554,11 +556,16 @@ async def test_easyiq_coordinator_connection_error(hass: HomeAssistant) -> None:
 
 
 async def test_meebook_coordinator_fetch(hass: HomeAssistant) -> None:
-    """Test Meebook coordinator fetches and flattens tasks."""
+    """Test Meebook coordinator fetches current and next week."""
     client = AsyncMock()
-    plan = mock_meebook_student_plan(name="Test Child")
+    current_task = mock_meebook_task(title="Current week")
+    next_task = mock_meebook_task(task_id=2, title="Next week")
+    current_plan = mock_meebook_student_plan(name="Test Child", tasks=[current_task])
+    next_plan = mock_meebook_student_plan(name="Test Child", tasks=[next_task])
     client.widgets = MagicMock()
-    client.widgets.get_meebook_weekplan = AsyncMock(return_value=[plan])
+    client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[current_plan], [next_plan]]
+    )
 
     profile = mock_profile()
     ctx = _create_widget_context()
@@ -566,10 +573,17 @@ async def test_meebook_coordinator_fetch(hass: HomeAssistant) -> None:
     coordinator = AulaMeebookCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
-    data = await coordinator._async_update_data()
+    with patch(
+        "custom_components.hass_aula.coordinator.dt_util.now",
+        return_value=datetime(2026, 8, 17, 12, 0, tzinfo=UTC),
+    ):
+        data = await coordinator._async_update_data()
 
-    assert 1 in data
-    assert len(data[1]) == 1  # one task from the single day plan
+    assert data.current[1] == [current_task]
+    assert data.next_week[1] == [next_task]
+    calls = client.widgets.get_meebook_weekplan.await_args_list
+    assert calls[0].kwargs["week"] == "2026-W34"
+    assert calls[1].kwargs["week"] == "2026-W35"
 
 
 async def test_meebook_coordinator_auth_error(hass: HomeAssistant) -> None:
