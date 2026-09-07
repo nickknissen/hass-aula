@@ -113,6 +113,9 @@ async def test_presence_sensor_attributes(
         exit_time=exit_time,
         exit_with="Parent",
         location="Room 1",
+        sleep_intervals=[
+            {"id": 27707363, "startTime": "12:05:00", "endTime": "13:15:00"}
+        ],
     )
     mock_aula_client.get_daily_overview = AsyncMock(return_value=overview)
     mock_aula_client.get_presence_templates = AsyncMock(
@@ -140,6 +143,10 @@ async def test_presence_sensor_attributes(
     assert state.attributes["self_decider_end_time"] == "16:30"
     # aula delivers this as a PresenceLocation; the attribute stays the name.
     assert state.attributes["location"] == "Room 1"
+    # Naps are passed through as the institution registered them, keys and all.
+    assert state.attributes["sleep_intervals"] == [
+        {"id": 27707363, "startTime": "12:05:00", "endTime": "13:15:00"}
+    ]
     # The recorder and the websocket API both JSON-encode state attributes, so
     # publishing the object itself breaks them rather than the assertion above.
     json.dumps(dict(state.attributes), cls=JSONEncoder)

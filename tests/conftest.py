@@ -127,6 +127,7 @@ def mock_daily_overview(
     exit_time: datetime | None = None,
     exit_with: str | None = None,
     location: str | None = None,
+    sleep_intervals: list[dict[str, Any]] | None = None,
 ) -> MagicMock:
     """
     Create a mock DailyOverview object.
@@ -136,6 +137,12 @@ def mock_daily_overview(
     string. Storing a bare string here would hide the fact that a caller
     putting it straight into a state attribute is publishing something that
     cannot be serialized.
+
+    ``sleep_intervals`` defaults to an empty list rather than being left to the
+    spec'd mock, which would hand callers a ``MagicMock`` that only fails once
+    something tries to serialize it. It is typed ``dict[str, Any]`` rather than
+    the package's ``SleepInterval`` (``dict[str, str]``) because the live API
+    also sends an integer ``id``.
     """
     overview = MagicMock(spec=DailyOverview)
     overview.status = status
@@ -145,6 +152,7 @@ def mock_daily_overview(
     overview.exit_time = exit_time
     overview.exit_with = exit_with
     overview.location = PresenceLocation(name=location) if location else None
+    overview.sleep_intervals = sleep_intervals if sleep_intervals is not None else []
     return overview
 
 

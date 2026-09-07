@@ -186,6 +186,15 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
             "exit_with": overview.exit_with,
             "self_decider_start_time": child_data.self_decider_start,
             "self_decider_end_time": child_data.self_decider_end,
+            # Naps as the institution registered them, e.g.
+            # [{"id": 27707363, "startTime": "12:05:00", "endTime": "13:15:00"}].
+            # These are dicts of JSON scalars, so unlike `location` they
+            # serialize into a state attribute as-is. Staff often register or
+            # correct a nap after the fact, so this is more trustworthy than
+            # watching the presence state flip to SLEEPING between five-minute
+            # polls. Passed through untouched: the keys are whatever the API
+            # sends, and the shape of an in-progress nap has not been observed.
+            "sleep_intervals": overview.sleep_intervals,
             # aula 1.7.0 turned this into a PresenceLocation object, which is
             # not JSON-serializable and so cannot go in a state attribute.
             # Keep publishing the name, which is what this attribute has always
