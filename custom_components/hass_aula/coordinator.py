@@ -17,6 +17,7 @@ from aula import (
 )
 from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
 from aula.models.meebook_weekplan import MeebookTask
+from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -649,32 +650,52 @@ class AulaEasyIQCoordinator(
 
             # EasyIQ serves both views from its school portal, which needs the
             # child's institution profile ID alongside their UniLogin, plus
-            # every child's UniLogin as the portal's child filter.
-            weekplan, homework = await asyncio.gather(
-                self.client.widgets.get_easyiq_weekplan(
-                    week=week,
-                    session_uuid=self.widget_context.session_uuid,
-                    institution_filter=inst_filter,
-                    child_id=child_id_str,
-                    widget_id=WIDGET_EASYIQ_WEEKPLAN,
-                    child_profile_id=str(child.id),
-                    all_child_user_ids=self.widget_context.child_filter,
-                ),
-                self.client.widgets.get_easyiq_homework(
-                    week=week,
-                    session_uuid=self.widget_context.session_uuid,
-                    institution_filter=inst_filter,
-                    child_id=child_id_str,
-                    child_profile_id=str(child.id),
-                    all_child_user_ids=self.widget_context.child_filter,
-                ),
-            )
+            # every child's UniLogin as the portal's child filter and every
+            # institution the guardian has, which is what the portal session is
+            # established under. Without the latter a child at a second school
+            # is not found (aula 1.8.0).
+            try:
+                weekplan, homework = await asyncio.gather(
+                    self.client.widgets.get_easyiq_weekplan(
+                        week=week,
+                        session_uuid=self.widget_context.session_uuid,
+                        institution_filter=inst_filter,
+                        child_id=child_id_str,
+                        widget_id=WIDGET_EASYIQ_WEEKPLAN,
+                        child_profile_id=str(child.id),
+                        all_child_user_ids=self.widget_context.child_filter,
+                        all_institution_filter=self.widget_context.institution_filter,
+                    ),
+                    self.client.widgets.get_easyiq_homework(
+                        week=week,
+                        session_uuid=self.widget_context.session_uuid,
+                        institution_filter=inst_filter,
+                        child_id=child_id_str,
+                        child_profile_id=str(child.id),
+                        all_child_user_ids=self.widget_context.child_filter,
+                        all_institution_filter=self.widget_context.institution_filter,
+                    ),
+                )
+            except EasyIQChildNotInPortal:
+                # The child's institution is not on EasyIQ at all — daycare,
+                # typically. An absence, not a failure, and permanent as far as
+                # polling is concerned, so keep the other children's data and
+                # leave this one's sensors empty.
+                LOGGER.debug("EasyIQ has no record of child %s", child.id)
+                return child.id, EasyIQChildData()
             return child.id, EasyIQChildData(weekplan=weekplan, homework=homework)
 
         async with _aula_api_errors(self.token_manager):
-            results = await asyncio.gather(
-                *(_fetch_child(child) for child in self.profile.children)
-            )
+            try:
+                results = await asyncio.gather(
+                    *(_fetch_child(child) for child in self.profile.children)
+                )
+            except EasyIQWrongChildSession as err:
+                # The portal answered for a different child than we switched to,
+                # so every row in this pass is suspect. Fail the update rather
+                # than publish one child's week under another's name.
+                msg = f"EasyIQ returned another child's data: {err}"
+                raise UpdateFailed(msg) from err
 
         return dict(results)
 
