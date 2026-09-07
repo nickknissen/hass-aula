@@ -11,6 +11,7 @@ from aula import (
     AulaRateLimitError,
     AulaServerError,
 )
+from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -38,6 +39,7 @@ from custom_components.hass_aula.data import (
 from .conftest import (
     mock_appointment,
     mock_calendar_event,
+    mock_child,
     mock_daily_overview,
     mock_easyiq_homework,
     mock_library_loan,
@@ -537,6 +539,105 @@ async def test_easyiq_coordinator_connection_error(hass: HomeAssistant) -> None:
     client.widgets = MagicMock()
     client.widgets.get_easyiq_weekplan = AsyncMock(
         side_effect=AulaConnectionError("Connection failed", 0)
+    )
+    client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_easyiq_coordinator_passes_guardian_institutions(
+    hass: HomeAssistant,
+) -> None:
+    """Test EasyIQ narrows the read to one child but opens the session to all."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[])
+    client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
+
+    # A guardian with a child at each of two schools. Reading child 1's week
+    # needs their institution alone as the filter, but the portal session has
+    # to be established under both or the second school's child is not found
+    # (aula 1.8.0).
+    profile = mock_profile(children=[mock_child(1), mock_child(2)])
+    ctx = WidgetContext(
+        child_filter=["1000", "2000"],
+        institution_filter=["inst_1", "inst_2"],
+        session_uuid="session_123",
+    )
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator._async_update_data()
+
+    for mock in (
+        client.widgets.get_easyiq_weekplan,
+        client.widgets.get_easyiq_homework,
+    ):
+        by_child = {
+            call.kwargs["child_id"]: call.kwargs for call in mock.call_args_list
+        }
+        assert by_child["1000"]["institution_filter"] == ["inst_1"]
+        assert by_child["2000"]["institution_filter"] == ["inst_2"]
+        for kwargs in by_child.values():
+            assert kwargs["all_institution_filter"] == ["inst_1", "inst_2"]
+
+
+async def test_easyiq_coordinator_child_not_in_portal(hass: HomeAssistant) -> None:
+    """Test a child EasyIQ has no record of empties only their own data."""
+    appt = mock_appointment()
+    hw = mock_easyiq_homework()
+    unknown_child = "EasyIQ's portal lists no child matching 2000"
+
+    def _weekplan(**kwargs: object) -> list[object]:
+        if kwargs["child_id"] != "1000":
+            raise EasyIQChildNotInPortal(unknown_child)
+        return [appt]
+
+    def _homework(**kwargs: object) -> list[object]:
+        if kwargs["child_id"] != "1000":
+            raise EasyIQChildNotInPortal(unknown_child)
+        return [hw]
+
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_easyiq_weekplan = AsyncMock(side_effect=_weekplan)
+    client.widgets.get_easyiq_homework = AsyncMock(side_effect=_homework)
+
+    # Child 2 is at a daycare, which is not on EasyIQ at all. Before aula 1.8.0
+    # that read returned a sibling's week; now it raises, and one such child
+    # must not take the whole update down with them.
+    profile = mock_profile(children=[mock_child(1), mock_child(2)])
+    ctx = WidgetContext(
+        child_filter=["1000", "2000"],
+        institution_filter=["inst_1", "inst_2"],
+        session_uuid="session_123",
+    )
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert data[1].weekplan == [appt]
+    assert data[1].homework == [hw]
+    assert data[2].weekplan == []
+    assert data[2].homework == []
+
+
+async def test_easyiq_coordinator_wrong_child_session(hass: HomeAssistant) -> None:
+    """Test a session on the wrong child fails the update instead of publishing."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_easyiq_weekplan = AsyncMock(
+        side_effect=EasyIQWrongChildSession("session is on another child")
     )
     client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
 
