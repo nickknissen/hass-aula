@@ -363,8 +363,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload an Aula config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        await entry.runtime_data.client.close()
+    if unload_ok and (runtime_data := getattr(entry, "runtime_data", None)):
+        await runtime_data.client.close()
     return unload_ok
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -217,17 +218,24 @@ async def test_reconfigure_flow_token_valid(
 
     with (
         patch(_MOCK_REFRESH, return_value=refreshed_token_data),
-        patch(_FETCH_WIDGETS, return_value=[]),
+        patch(
+            _FETCH_WIDGETS,
+            return_value=[SimpleNamespace(widget_id="test-widget", name="Test")],
+        ),
     ):
         result = await entry.start_reconfigure_flow(hass)
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "select_widgets"
 
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={CONF_WIDGETS: []},
-    )
+    with patch(
+        "custom_components.hass_aula.config_flow.AulaFlowHandler.async_update_reload_and_abort",
+        return_value={"type": FlowResultType.ABORT, "reason": "reconfigure_successful"},
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: []},
+        )
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
