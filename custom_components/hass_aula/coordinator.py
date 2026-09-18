@@ -754,7 +754,13 @@ class AulaMeebookCoordinator(
 
         async with _aula_api_errors(self.token_manager):
             current = await self._fetch_week(current_week)
-            next_week_data = await self._fetch_week(next_week)
+            try:
+                next_week_data = await self._fetch_week(next_week)
+            except (AulaConnectionError, AulaServerError, AulaRateLimitError):
+                # Optional future data must not hide the current week's tasks.
+                # Authentication errors still reach the outer error translator.
+                LOGGER.warning("Could not fetch next week's Meebook tasks")
+                next_week_data = None
 
         return MeebookWeekplanData(current=current, next_week=next_week_data)
 

@@ -620,7 +620,7 @@ class AulaMeebookWeekplanSensor(AulaEntity[AulaMeebookCoordinator], SensorEntity
 
     @property
     def _next_week_tasks(self) -> list[MeebookTask]:
-        if not self.coordinator.data:
+        if not self.coordinator.data or self.coordinator.data.next_week is None:
             return []
         return self.coordinator.data.next_week.get(self._child.id, [])
 
@@ -646,10 +646,10 @@ class AulaMeebookWeekplanSensor(AulaEntity[AulaMeebookCoordinator], SensorEntity
         """Return task details for current and next week."""
         tasks = self._tasks
         next_week_tasks = self._next_week_tasks
-        if not tasks and not next_week_tasks:
-            return {}
-
-        attrs: dict[str, Any] = {}
+        data = self.coordinator.data
+        attrs: dict[str, Any] = {
+            "next_week_available": data is not None and data.next_week is not None,
+        }
         if tasks:
             attrs["tasks"] = self._format_tasks(tasks)
         if next_week_tasks:

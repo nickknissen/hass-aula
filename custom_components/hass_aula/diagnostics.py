@@ -103,7 +103,11 @@ async def async_get_config_entry_diagnostics(
         widgets["meebook"] = {
             str(child_id): {
                 "current_week": len(tasks),
-                "next_week": len(meebook_data.next_week.get(child_id, [])),
+                "next_week": (
+                    len(meebook_data.next_week.get(child_id, []))
+                    if meebook_data.next_week is not None
+                    else None
+                ),
             }
             for child_id, tasks in meebook_data.current.items()
         }

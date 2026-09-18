@@ -315,6 +315,48 @@ async def test_meebook_enabled_by_overview_widget(
     assert entry.runtime_data.meebook_coordinator is not None
 
 
+async def test_meebook_overview_widget_keeps_the_api_contract(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test 0119 only enables the feature; the API call is unchanged."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK_OVERVIEW])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    calls = mock_aula_client.widgets.get_meebook_weekplan.await_args_list
+    assert calls
+    for c in calls:
+        assert not c.args
+        assert set(c.kwargs) == {
+            "child_filter",
+            "institution_filter",
+            "week",
+            "session_uuid",
+        }
+        # The package mints the Meebook token itself; 0119 must never be
+        # passed down as a token scope.
+        assert WIDGET_MEEBOOK_OVERVIEW not in str(c.kwargs)
+
+
+async def test_meebook_both_provider_widgets_create_one_coordinator(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test selecting both Meebook providers does not duplicate coordinators."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK, WIDGET_MEEBOOK_OVERVIEW])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.meebook_coordinator is not None
+    # One coordinator refresh means one current-week and one next-week request.
+    assert mock_aula_client.widgets.get_meebook_weekplan.await_count == 2
+
+
 async def test_mu_tasks_enabled_by_the_sso_widget_alone(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,

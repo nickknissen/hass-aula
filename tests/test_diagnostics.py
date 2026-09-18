@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock
 
+import pytest
+from aula import AulaConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import JSONEncoder
 
@@ -16,6 +18,7 @@ from .conftest import (
     make_widget_config_entry,
     mock_daily_overview,
     mock_meebook_student_plan,
+    mock_meebook_task,
 )
 
 
@@ -97,14 +100,25 @@ async def test_diagnostics_calendar_counts(
     assert isinstance(result["calendar_event_counts"]["1"], int)
 
 
+@pytest.mark.parametrize("next_count", [0, 2, None])
 async def test_diagnostics_meebook_week_counts(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
+    next_count: int | None,
 ) -> None:
     """Test diagnostics reports separate current and next Meebook counts."""
     plan = mock_meebook_student_plan(name="Test Child")
     mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(
-        side_effect=[[plan], [plan]]
+        side_effect=[
+            [plan],
+            AulaConnectionError("private response", 0)
+            if next_count is None
+            else [
+                mock_meebook_student_plan(
+                    name="Test Child", tasks=[mock_meebook_task()] * next_count
+                )
+            ],
+        ]
     )
 
     entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
@@ -116,5 +130,8 @@ async def test_diagnostics_meebook_week_counts(
 
     assert result["widgets"]["meebook"]["1"] == {
         "current_week": 1,
-        "next_week": 1,
+        "next_week": next_count,
     }
+    serialized = json.dumps(result["widgets"]["meebook"], cls=JSONEncoder)
+    assert "Weekly Activity" not in serialized
+    assert "private response" not in serialized

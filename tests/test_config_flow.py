@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aula import WidgetConfiguration
 from aula.auth.exceptions import PasswordInvalidError, TokenInvalidError
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
@@ -24,6 +25,7 @@ from custom_components.hass_aula.const import (
     CONF_WIDGETS,
     DOMAIN,
     SUPPORTED_WIDGETS,
+    WIDGET_MEEBOOK,
     WIDGET_MEEBOOK_OVERVIEW,
 )
 
@@ -33,6 +35,31 @@ from .conftest import MOCK_TOKEN_DATA, MOCK_USERNAME, make_config_entry
 def test_meebook_overview_widget_is_supported() -> None:
     """Test Meebook overblik is offered as a supported data provider."""
     assert WIDGET_MEEBOOK_OVERVIEW in SUPPORTED_WIDGETS
+
+
+def _widget(
+    widget_id: str, name: str, widget_type: str = "secure"
+) -> WidgetConfiguration:
+    """Build a widget as returned by the Aula widget discovery endpoint."""
+    return WidgetConfiguration(
+        widget_id=widget_id,
+        name=name,
+        widget_supplier="Meebook",
+        widget_type=widget_type,
+        placement="fullWidth",
+        is_secure=widget_type == "secure",
+        can_access_on_mobile=True,
+        aggregated_display_mode="",
+    )
+
+
+def _widget_options(result: Any) -> dict[str, str]:
+    """Return the select_widgets options as {widget_id: label}."""
+    for key, validator in result["data_schema"].schema.items():
+        if key == CONF_WIDGETS:
+            return {o["value"]: o["label"] for o in validator.config["options"]}
+    msg = "no widget selector in the select_widgets form"
+    raise AssertionError(msg)
 
 
 # Patch target for widget fetching (avoids network calls in tests)
@@ -60,6 +87,62 @@ async def _advance_to_select_widgets(hass: HomeAssistant, flow_id: str) -> None:
         result = await hass.config_entries.flow.async_configure(flow_id)
 
     return result
+
+
+async def test_user_flow_selects_discovered_meebook_overview_widget(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test a discovered Meebook overblik widget is supported and persisted."""
+    client = AsyncMock()
+    client.get_widgets.return_value = [
+        _widget(WIDGET_MEEBOOK_OVERVIEW, "Meebook overblik"),
+        _widget(WIDGET_MEEBOOK, "Meebook ugeplan"),
+        _widget("8888", "Some other provider"),
+        _widget("9999", "Insecure widget", widget_type="insecure"),
+    ]
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+
+    with (
+        patch(
+            "custom_components.hass_aula.config_flow.authenticate",
+            return_value=MOCK_TOKEN_DATA,
+        ),
+        patch(
+            "custom_components.hass_aula.config_flow.create_client",
+            return_value=client,
+        ),
+        patch(
+            "custom_components.hass_aula.config_flow.HttpxHttpClient",
+            return_value=AsyncMock(),
+        ),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_MITID_USERNAME: MOCK_USERNAME},
+        )
+        if result["type"] is FlowResultType.SHOW_PROGRESS:
+            result = await _advance_to_select_widgets(hass, result["flow_id"])
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_widgets"
+
+        options = _widget_options(result)
+        assert options[WIDGET_MEEBOOK_OVERVIEW] == "Meebook overblik"
+        assert "not supported" not in options[WIDGET_MEEBOOK_OVERVIEW]
+        assert "not supported" in options["8888"]
+        assert "9999" not in options
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_WIDGETS: [WIDGET_MEEBOOK_OVERVIEW]},
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_WIDGETS] == [WIDGET_MEEBOOK_OVERVIEW]
 
 
 async def test_user_flow_success(
