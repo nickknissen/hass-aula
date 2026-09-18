@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from aula import (
@@ -12,6 +13,7 @@ from aula import (
     AulaServerError,
 )
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -45,6 +47,7 @@ from .conftest import (
     mock_library_loan,
     mock_library_status,
     mock_meebook_student_plan,
+    mock_meebook_task,
     mock_message,
     mock_message_thread,
     mock_mu_task,
@@ -500,15 +503,15 @@ async def test_easyiq_coordinator_passes_portal_identifiers(
 
     await coordinator._async_update_data()
 
-    for call in (
+    for api_call in (
         client.widgets.get_easyiq_weekplan.call_args,
         client.widgets.get_easyiq_homework.call_args,
     ):
         # The child's UniLogin identifies the child, their institution profile
         # ID identifies the row owner, and the portal filters on every child.
-        assert call.kwargs["child_id"] == "1000"
-        assert call.kwargs["child_profile_id"] == "1"
-        assert call.kwargs["all_child_user_ids"] == ["1000"]
+        assert api_call.kwargs["child_id"] == "1000"
+        assert api_call.kwargs["child_profile_id"] == "1"
+        assert api_call.kwargs["all_child_user_ids"] == ["1000"]
 
 
 async def test_easyiq_coordinator_auth_error(hass: HomeAssistant) -> None:
@@ -654,12 +657,27 @@ async def test_easyiq_coordinator_wrong_child_session(hass: HomeAssistant) -> No
 # --- Meebook Coordinator Tests ---
 
 
-async def test_meebook_coordinator_fetch(hass: HomeAssistant) -> None:
-    """Test Meebook coordinator fetches and flattens tasks."""
+@pytest.mark.parametrize(
+    ("now", "weeks"),
+    [
+        (datetime(2026, 8, 17, 12, tzinfo=UTC), ("2026-W34", "2026-W35")),
+        (datetime(2026, 12, 28, 12, tzinfo=UTC), ("2026-W53", "2027-W01")),
+        (datetime(2027, 1, 1, 12, tzinfo=UTC), ("2026-W53", "2027-W01")),
+    ],
+)
+async def test_meebook_coordinator_fetch(
+    hass: HomeAssistant, now: datetime, weeks: tuple[str, str]
+) -> None:
+    """Test Meebook coordinator fetches current and next week."""
     client = AsyncMock()
-    plan = mock_meebook_student_plan(name="Test Child")
+    current_task = mock_meebook_task(title="Current week")
+    next_task = mock_meebook_task(task_id=2, title="Next week")
+    current_plan = mock_meebook_student_plan(name="Test Child", tasks=[current_task])
+    next_plan = mock_meebook_student_plan(name="Test Child", tasks=[next_task])
     client.widgets = MagicMock()
-    client.widgets.get_meebook_weekplan = AsyncMock(return_value=[plan])
+    client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[current_plan], [next_plan]]
+    )
 
     profile = mock_profile()
     ctx = _create_widget_context()
@@ -667,10 +685,147 @@ async def test_meebook_coordinator_fetch(hass: HomeAssistant) -> None:
     coordinator = AulaMeebookCoordinator(hass, client, profile, ctx, tm)
     coordinator.config_entry = _create_config_entry()
 
-    data = await coordinator._async_update_data()
+    with patch(
+        "custom_components.hass_aula.coordinator.dt_util.now",
+        return_value=now,
+    ):
+        data = await coordinator._async_update_data()
 
-    assert 1 in data
-    assert len(data[1]) == 1  # one task from the single day plan
+    assert data.current[1] == [current_task]
+    assert data.next_week is not None
+    assert data.next_week[1] == [next_task]
+    assert client.widgets.get_meebook_weekplan.await_args_list == [
+        call(
+            child_filter=ctx.child_filter,
+            institution_filter=ctx.institution_filter,
+            week=week,
+            session_uuid=ctx.session_uuid,
+        )
+        for week in weeks
+    ]
+
+
+async def test_meebook_coordinator_fetch_uses_home_assistant_timezone(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Test the requested weeks follow HA's timezone, not UTC."""
+    await hass.config.async_set_time_zone("Pacific/Auckland")
+    # 23:00 UTC on Sunday of 2026-W33 is already Monday of 2026-W34 in Auckland.
+    freezer.move_to("2026-08-16T23:00:00+00:00")
+
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_meebook_weekplan = AsyncMock(return_value=[])
+    coordinator = AulaMeebookCoordinator(
+        hass, client, mock_profile(), _create_widget_context(), _create_token_manager()
+    )
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator._async_update_data()
+
+    assert [
+        c.kwargs["week"] for c in client.widgets.get_meebook_weekplan.await_args_list
+    ] == ["2026-W34", "2026-W35"]
+
+
+@pytest.mark.parametrize(
+    "error_type", [AulaConnectionError, AulaServerError, AulaRateLimitError]
+)
+async def test_meebook_next_week_failure_recovers(
+    hass: HomeAssistant,
+    error_type: type[Exception],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Keep current data, clear stale next tasks, and recover on refresh."""
+    client = AsyncMock()
+    plan = mock_meebook_student_plan(name="Test Child")
+    client.widgets.get_meebook_weekplan.side_effect = [
+        [plan],
+        [plan],
+        [plan],
+        error_type("private upstream response", 503),
+        [plan],
+        [],
+    ]
+    coordinator = AulaMeebookCoordinator(
+        hass, client, mock_profile(), _create_widget_context(), _create_token_manager()
+    )
+    coordinator.config_entry = _create_config_entry()
+    await coordinator.async_refresh()
+    assert coordinator.data.next_week is not None
+    assert coordinator.data.next_week[1]
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert coordinator.data.current[1]
+    assert coordinator.data.next_week is None
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings
+    # The warning names the problem, never the upstream payload.
+    assert all("private upstream response" not in r.getMessage() for r in warnings)
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert coordinator.data.next_week == {1: []}
+
+
+async def test_meebook_coordinator_refresh_across_week_boundary(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Test a refresh in a new week relabels nothing and drops old tasks."""
+    await hass.config.async_set_time_zone("Europe/Copenhagen")
+    freezer.move_to("2026-12-28T09:00:00+01:00")
+
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    this_week = mock_meebook_student_plan(
+        name="Test Child", tasks=[mock_meebook_task(title="Week 53")]
+    )
+    new_year = mock_meebook_student_plan(
+        name="Test Child", tasks=[mock_meebook_task(task_id=2, title="Week 1")]
+    )
+    client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[this_week], [new_year], [new_year], []]
+    )
+    coordinator = AulaMeebookCoordinator(
+        hass, client, mock_profile(), _create_widget_context(), _create_token_manager()
+    )
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator.async_refresh()
+    assert [t.title for t in coordinator.data.current[1]] == ["Week 53"]
+    assert coordinator.data.next_week is not None
+    assert [t.title for t in coordinator.data.next_week[1]] == ["Week 1"]
+
+    freezer.move_to("2027-01-04T09:00:00+01:00")
+    await coordinator.async_refresh()
+
+    assert [t.title for t in coordinator.data.current[1]] == ["Week 1"]
+    assert coordinator.data.next_week == {1: []}
+    assert [
+        c.kwargs["week"] for c in client.widgets.get_meebook_weekplan.await_args_list
+    ] == ["2026-W53", "2027-W01", "2027-W01", "2027-W02"]
+
+
+@pytest.mark.parametrize("refresh_fails", [False, True])
+async def test_meebook_next_week_auth_error(
+    hass: HomeAssistant, refresh_fails: bool
+) -> None:
+    """Next-week authentication failures must still refresh or reauthenticate."""
+    client = AsyncMock()
+    client.widgets.get_meebook_weekplan.side_effect = [
+        [],
+        AulaAuthenticationError("expired", 401),
+    ]
+    tm = _create_token_manager()
+    if refresh_fails:
+        tm.async_refresh_and_rebuild_client.side_effect = AulaAuthenticationError(
+            "expired", 401
+        )
+    coordinator = AulaMeebookCoordinator(
+        hass, client, mock_profile(), _create_widget_context(), tm
+    )
+    with pytest.raises(ConfigEntryAuthFailed if refresh_fails else UpdateFailed):
+        await coordinator._async_update_data()
+    tm.async_refresh_and_rebuild_client.assert_awaited_once()
 
 
 async def test_meebook_coordinator_auth_error(hass: HomeAssistant) -> None:
@@ -710,6 +865,9 @@ async def test_meebook_coordinator_connection_error(hass: HomeAssistant) -> None
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
+
+    # A failed current week must not trigger the optional next-week request.
+    assert client.widgets.get_meebook_weekplan.await_count == 1
 
 
 # --- Huskelisten Coordinator Tests ---

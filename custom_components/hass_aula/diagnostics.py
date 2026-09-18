@@ -99,9 +99,17 @@ async def async_get_config_entry_diagnostics(
         }
 
     if runtime_data.meebook_coordinator and runtime_data.meebook_coordinator.data:
+        meebook_data = runtime_data.meebook_coordinator.data
         widgets["meebook"] = {
-            str(child_id): len(tasks)
-            for child_id, tasks in runtime_data.meebook_coordinator.data.items()
+            str(child_id): {
+                "current_week": len(tasks),
+                "next_week": (
+                    len(meebook_data.next_week.get(child_id, []))
+                    if meebook_data.next_week is not None
+                    else None
+                ),
+            }
+            for child_id, tasks in meebook_data.current.items()
         }
 
     if (

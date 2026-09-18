@@ -6,6 +6,8 @@ import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
+import pytest
+from aula import AulaConnectionError
 from aula.models.presence import PresenceState
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -18,9 +20,11 @@ from custom_components.hass_aula.const import (
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
     WIDGET_MEEBOOK,
+    WIDGET_MEEBOOK_OVERVIEW,
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
+from custom_components.hass_aula.sensor import MAX_ATTRIBUTE_ITEMS
 
 from .conftest import (
     make_config_entry,
@@ -32,6 +36,7 @@ from .conftest import (
     mock_library_loan,
     mock_library_status,
     mock_meebook_student_plan,
+    mock_meebook_task,
     mock_mu_task,
     mock_mu_weekly_letter,
     mock_mu_weekly_person,
@@ -583,15 +588,29 @@ async def test_easyiq_sensors_not_created_when_disabled(
 # --- Meebook Sensor Tests ---
 
 
+@pytest.mark.parametrize(
+    "widgets",
+    [
+        [WIDGET_MEEBOOK],
+        [WIDGET_MEEBOOK_OVERVIEW],
+        [WIDGET_MEEBOOK, WIDGET_MEEBOOK_OVERVIEW],
+    ],
+)
 async def test_meebook_weekplan_sensor(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
+    widgets: list[str],
 ) -> None:
-    """Test Meebook weekplan sensor shows task count."""
+    """Test Meebook weekplan sensor for both advertised widget IDs."""
     plan = mock_meebook_student_plan(name="Test Child")
-    mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(return_value=[plan])
+    next_plan = mock_meebook_student_plan(
+        name="Test Child", tasks=[mock_meebook_task(title="Next task")] * 2
+    )
+    mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[plan], [next_plan]]
+    )
 
-    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry = make_widget_config_entry(widgets=widgets)
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -601,6 +620,113 @@ async def test_meebook_weekplan_sensor(
     assert state.state == "1"
     assert len(state.attributes["tasks"]) == 1
     assert state.attributes["tasks"][0]["title"] == "Weekly Activity"
+    assert len(state.attributes["next_week_tasks"]) == 2
+    assert state.attributes["next_week_tasks"][0]["title"] == "Next task"
+    assert state.attributes["next_week_available"] is True
+    assert mock_aula_client.widgets.get_meebook_weekplan.await_count == 2
+    assert (
+        len([s for s in hass.states.async_all() if "meebook_weekplan" in s.entity_id])
+        == 1
+    )
+
+
+@pytest.mark.parametrize(
+    ("current_count", "next_count"),
+    [(0, 0), (1, 0), (0, 2), (MAX_ATTRIBUTE_ITEMS + 1, MAX_ATTRIBUTE_ITEMS + 2)],
+)
+async def test_meebook_task_attributes(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    current_count: int,
+    next_count: int,
+) -> None:
+    """Empty lists are omitted and each week's attributes are capped separately."""
+    task = mock_meebook_task()
+    mock_aula_client.widgets.get_meebook_weekplan.side_effect = [
+        [mock_meebook_student_plan(name="Test Child", tasks=[task] * count)]
+        for count in (current_count, next_count)
+    ]
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.test_child_meebook_weekplan")
+    assert state is not None
+    assert state.state == str(current_count)
+    assert state.attributes["next_week_available"] is True
+    for key, count in (("tasks", current_count), ("next_week_tasks", next_count)):
+        if count:
+            assert state.attributes[key] == [
+                {"title": task.title, "type": task.type, "content": task.content}
+            ] * min(count, MAX_ATTRIBUTE_ITEMS)
+        else:
+            assert key not in state.attributes
+
+
+async def test_meebook_sensor_partial_failure_and_recovery(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Refresh updates HA state and drops stale future tasks on failure."""
+    plan = mock_meebook_student_plan(name="Test Child")
+    mock_aula_client.widgets.get_meebook_weekplan.side_effect = [
+        [plan],
+        [plan],
+        [plan],
+        AulaConnectionError("offline", 0),
+        [],
+        [plan],
+        AulaConnectionError("offline", 0),
+    ]
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data.meebook_coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.test_child_meebook_weekplan")
+    assert state is not None
+    assert state.state == "1"
+    assert state.attributes["next_week_available"] is False
+    assert "next_week_tasks" not in state.attributes
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.test_child_meebook_weekplan")
+    assert state is not None
+    assert state.state == "0"
+    assert state.attributes["next_week_available"] is True
+    assert len(state.attributes["next_week_tasks"]) == 1
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.test_child_meebook_weekplan")
+    assert state is not None
+    assert state.state == "unavailable"
+    assert mock_aula_client.widgets.get_meebook_weekplan.await_count == 7
+
+
+async def test_meebook_weekplan_sensor_next_week_when_current_empty(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test next-week Meebook tasks remain visible with an empty current week."""
+    next_task = mock_meebook_task(title="Next week activity")
+    next_plan = mock_meebook_student_plan(name="Test Child", tasks=[next_task])
+    mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[[], [next_plan]]
+    )
+
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK_OVERVIEW])
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_meebook_weekplan")
+    assert state is not None
+    assert state.state == "0"
+    assert "tasks" not in state.attributes
+    assert len(state.attributes["next_week_tasks"]) == 1
+    assert state.attributes["next_week_tasks"][0]["title"] == "Next week activity"
 
 
 async def test_meebook_sensor_not_created_when_disabled(

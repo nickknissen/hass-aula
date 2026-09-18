@@ -16,7 +16,6 @@ from aula import (
     DailyOverview,
 )
 from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
-from aula.models.meebook_weekplan import MeebookTask
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -46,6 +45,7 @@ from .data import (
     EasyIQChildData,
     HuskelistenChildData,
     LibraryChildData,
+    MeebookWeekplanData,
     MessagePreview,
     MessagesData,
     WidgetContext,
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from aula import AulaApiClient, Child, Profile
+    from aula.models.meebook_weekplan import MeebookTask
     from aula.models.mu_weekly_letter import MUWeeklyLetter
     from aula.models.presence_template import PresenceWeekTemplate
     from homeassistant.core import HomeAssistant
@@ -701,7 +702,7 @@ class AulaEasyIQCoordinator(
 
 
 class AulaMeebookCoordinator(
-    _AulaWidgetCoordinator[dict[int, list[MeebookTask]]],
+    _AulaWidgetCoordinator[MeebookWeekplanData],
 ):
     """Coordinator for fetching Meebook weekplan data."""
 
@@ -724,16 +725,14 @@ class AulaMeebookCoordinator(
             update_interval=timedelta(seconds=MEEBOOK_POLL_INTERVAL),
         )
 
-    async def _async_update_data(self) -> dict[int, list[MeebookTask]]:
-        """Fetch Meebook weekplan and distribute tasks to children."""
-        week = dt_util.now().strftime("%G-W%V")
-        async with _aula_api_errors(self.token_manager):
-            student_plans = await self.client.widgets.get_meebook_weekplan(
-                child_filter=self.widget_context.child_filter,
-                institution_filter=self.widget_context.institution_filter,
-                week=week,
-                session_uuid=self.widget_context.session_uuid,
-            )
+    async def _fetch_week(self, week: str) -> dict[int, list[MeebookTask]]:
+        """Fetch one Meebook weekplan and distribute tasks to children."""
+        student_plans = await self.client.widgets.get_meebook_weekplan(
+            child_filter=self.widget_context.child_filter,
+            institution_filter=self.widget_context.institution_filter,
+            week=week,
+            session_uuid=self.widget_context.session_uuid,
+        )
 
         result: dict[int, list[MeebookTask]] = {
             child.id: [] for child in self.profile.children
@@ -746,6 +745,24 @@ class AulaMeebookCoordinator(
                     result[child.id].extend(day_plan.tasks)
 
         return result
+
+    async def _async_update_data(self) -> MeebookWeekplanData:
+        """Fetch Meebook tasks for current and next week."""
+        now = dt_util.now()
+        current_week = now.strftime("%G-W%V")
+        next_week = (now + timedelta(weeks=1)).strftime("%G-W%V")
+
+        async with _aula_api_errors(self.token_manager):
+            current = await self._fetch_week(current_week)
+            try:
+                next_week_data = await self._fetch_week(next_week)
+            except (AulaConnectionError, AulaServerError, AulaRateLimitError):
+                # Optional future data must not hide the current week's tasks.
+                # Authentication errors still reach the outer error translator.
+                LOGGER.warning("Could not fetch next week's Meebook tasks")
+                next_week_data = None
+
+        return MeebookWeekplanData(current=current, next_week=next_week_data)
 
 
 class AulaHuskelistenCoordinator(

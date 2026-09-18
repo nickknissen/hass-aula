@@ -147,6 +147,44 @@ and a `preview` of the newest message in that thread (clipped to 200 characters)
 Pass a `thread_id` to [`hass_aula.get_thread_messages`](#hass_aulaget_thread_messages)
 to read the full text.
 
+### Meebook weekplan
+
+Created per child when a Meebook data provider is selected during setup. Aula
+advertises Meebook under two widget IDs — `0004` (ugeplan) and `0119` (Meebook
+overblik) — and either one enables the sensor. Selecting both still yields a
+single sensor per child.
+
+| Entity | Description |
+|--------|-------------|
+| `sensor.<child>_meebook_weekplan` | Number of tasks in the **current** ISO week |
+
+**Meebook weekplan sensor attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `tasks` | This week's tasks, each with `title`, `type` and `content` (at most 20 items) |
+| `next_week_tasks` | Next ISO week's tasks, same shape, with its own 20-item limit |
+| `next_week_available` | `false` when next week could not be fetched on the last refresh |
+
+The state counts this week's tasks only; next week's tasks never change it, and
+`tasks` stays this week's list. Both lists are omitted when empty, so
+`next_week_available` is what separates an empty week from a failed request — a
+week that was fetched and simply has no tasks still reports `true`.
+
+If only the next-week request fails (connection problem, server error, or rate
+limit), this week's data stays available and `next_week_available` turns
+`false`. Stale next-week tasks are dropped rather than carried over, and the
+next successful poll brings them back. An expired session is not treated as
+optional data: it still triggers the usual token refresh and, failing that,
+re-authentication.
+
+Because empty lists are omitted, default the attribute in templates:
+
+```yaml
+{% set next_week = state_attr('sensor.emma_meebook_weekplan', 'next_week_tasks') or [] %}
+{{ next_week | map(attribute='title') | list | join(', ') }}
+```
+
 ### Calendar
 
 | Entity | Description |

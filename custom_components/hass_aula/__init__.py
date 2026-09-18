@@ -25,13 +25,13 @@ from .const import (
     DOMAIN,
     LEGACY_WIDGET_EASYIQ,
     LOGGER,
+    MEEBOOK_PROVIDER_WIDGETS,
     MU_TASK_WIDGETS,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_HUSKELISTEN,
-    WIDGET_MEEBOOK,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
@@ -71,7 +71,7 @@ _ALL_WIDGET_IDS = (
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_EASYIQ_HOMEWORK,
-    WIDGET_MEEBOOK,
+    *MEEBOOK_PROVIDER_WIDGETS,
     WIDGET_HUSKELISTEN,
 )
 
@@ -191,7 +191,7 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    if is_widget_enabled(entry, WIDGET_MEEBOOK):
+    if any(is_widget_enabled(entry, w) for w in MEEBOOK_PROVIDER_WIDGETS):
         wc.meebook = AulaMeebookCoordinator(
             hass, client, profile, widget_context, token_manager
         )

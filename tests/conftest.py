@@ -398,7 +398,7 @@ def mock_meebook_student_plan(
     plan.unilogin = "test_uni"
     day = MagicMock(spec=MeebookDayPlan)
     day.date = "2024-01-15"
-    day.tasks = tasks or [mock_meebook_task()]
+    day.tasks = [mock_meebook_task()] if tasks is None else tasks
     plan.week_plan = [day]
     return plan
 

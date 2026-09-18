@@ -5,12 +5,21 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock
 
+import pytest
+from aula import AulaConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import JSONEncoder
 
+from custom_components.hass_aula.const import WIDGET_MEEBOOK
 from custom_components.hass_aula.diagnostics import async_get_config_entry_diagnostics
 
-from .conftest import make_config_entry, mock_daily_overview
+from .conftest import (
+    make_config_entry,
+    make_widget_config_entry,
+    mock_daily_overview,
+    mock_meebook_student_plan,
+    mock_meebook_task,
+)
 
 
 async def test_diagnostics_redacts_pii(
@@ -89,3 +98,40 @@ async def test_diagnostics_calendar_counts(
 
     assert "1" in result["calendar_event_counts"]
     assert isinstance(result["calendar_event_counts"]["1"], int)
+
+
+@pytest.mark.parametrize("next_count", [0, 2, None])
+async def test_diagnostics_meebook_week_counts(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    next_count: int | None,
+) -> None:
+    """Test diagnostics reports separate current and next Meebook counts."""
+    plan = mock_meebook_student_plan(name="Test Child")
+    mock_aula_client.widgets.get_meebook_weekplan = AsyncMock(
+        side_effect=[
+            [plan],
+            AulaConnectionError("private response", 0)
+            if next_count is None
+            else [
+                mock_meebook_student_plan(
+                    name="Test Child", tasks=[mock_meebook_task()] * next_count
+                )
+            ],
+        ]
+    )
+
+    entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert result["widgets"]["meebook"]["1"] == {
+        "current_week": 1,
+        "next_week": next_count,
+    }
+    serialized = json.dumps(result["widgets"]["meebook"], cls=JSONEncoder)
+    assert "Weekly Activity" not in serialized
+    assert "private response" not in serialized
