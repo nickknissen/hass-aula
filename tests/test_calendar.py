@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
 
+from custom_components.hass_aula.calendar import _convert_event
+
 from .conftest import make_config_entry, mock_calendar_event
 
 
@@ -103,3 +105,57 @@ async def test_calendar_event_with_location(
 
     state = hass.states.get("calendar.test_child_school_calendar")
     assert state is not None
+
+
+def test_convert_event_names_every_teacher() -> None:
+    """A co-taught lesson names all its adults, not just the first."""
+    event = mock_calendar_event(
+        teacher_name="Laerer 1",
+        teacher_names=["Laerer 1", "Laerer 2"],
+    )
+
+    assert "Teachers: Laerer 1, Laerer 2" in _convert_event(event).description
+
+
+def test_convert_event_uses_singular_label_for_one_teacher() -> None:
+    """A lesson with one adult still reads naturally."""
+    event = mock_calendar_event(teacher_name="Mr. Smith")
+
+    assert "Teacher: Mr. Smith" in _convert_event(event).description
+
+
+def test_convert_event_falls_back_to_the_singular_field() -> None:
+    """An event carrying no name list still names its teacher."""
+    event = mock_calendar_event(teacher_name="Mr. Smith", teacher_names=[])
+
+    assert "Teacher: Mr. Smith" in _convert_event(event).description
+
+
+def test_convert_event_names_every_substitute() -> None:
+    """Substitutes are listed in full too."""
+    event = mock_calendar_event(
+        teacher_name="Mrs. Jones",
+        has_substitute=True,
+        substitute_name="Mr. Brown",
+        substitute_names=["Mr. Brown", "Ms. Green"],
+    )
+
+    assert "Substitutes: Mr. Brown, Ms. Green" in _convert_event(event).description
+
+
+def test_convert_event_omits_substitutes_when_not_flagged() -> None:
+    """Names left over on a lesson with no substitute are not shown."""
+    event = mock_calendar_event(
+        teacher_name="Mrs. Jones",
+        has_substitute=False,
+        substitute_names=["Mr. Brown"],
+    )
+
+    assert "Substitute" not in _convert_event(event).description
+
+
+def test_convert_event_without_any_teacher_has_no_description() -> None:
+    """An event with nothing to describe gets no description at all."""
+    event = mock_calendar_event(teacher_name=None, location=None)
+
+    assert _convert_event(event).description is None

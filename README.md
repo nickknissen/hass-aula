@@ -145,8 +145,10 @@ The following entities are created **per child**:
 |-----------|-------------|
 | `messages` | The 5 most recent message threads |
 
-Each entry in `messages` carries `thread_id`, `subject`, `sender`, `date`, `unread`
-and a `preview` of the newest message in that thread (clipped to 200 characters).
+Each entry in `messages` carries `thread_id`, `subject`, `sender`, `date`, `unread`,
+`has_attachments` and a `preview` of the newest message in that thread (clipped to
+200 characters). `has_attachments` describes that newest message, and is `false`
+when the thread's messages could not be fetched.
 Pass a `thread_id` to [`hass_aula.get_thread_messages`](#hass_aulaget_thread_messages)
 to read the full text.
 
@@ -188,11 +190,43 @@ Because empty lists are omitted, default the attribute in templates:
 {{ next_week | map(attribute='title') | list | join(', ') }}
 ```
 
+### EasyIQ weekplan
+
+Created per child when EasyIQ is selected as a data provider during setup.
+
+| Entity | Description |
+|--------|-------------|
+| `sensor.<child>_weekplan` | Number of entries in the current ISO week |
+
+**EasyIQ weekplan sensor attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `appointments` | This week's entries (at most 20 items) |
+
+Each entry carries `title`, `start`, `end`, `class_name`, `description` and
+`is_notice`. `description` is the body as the HTML EasyIQ authored.
+
+`is_notice` marks the rows EasyIQ files under no subject — "Vigtig information"
+and similar. These carry their own `start`, so the day a notice belongs to is
+preserved rather than being flattened to the top of the week:
+
+```yaml
+{% set week = state_attr('sensor.emma_weekplan', 'appointments') or [] %}
+{% for n in week if n.is_notice %}
+{{ as_timestamp(n.start) | timestamp_custom('%A %d/%m') }}: {{ n.title }}
+{% endfor %}
+```
+
 ### Calendar
 
 | Entity | Description |
 |--------|-------------|
-| `calendar.<child>_school` | Upcoming school events including teacher, substitute, and location |
+| `calendar.<child>_school` | Upcoming school events including teachers, substitutes, and location |
+
+Aula returns a separate row for every adult attached to a lesson. These are
+merged into a single event, so a co-taught lesson appears once, with every
+teacher named in the event description.
 
 ---
 

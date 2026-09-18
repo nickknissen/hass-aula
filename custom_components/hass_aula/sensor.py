@@ -342,6 +342,7 @@ class AulaLatestMessagesSensor(
                     "date": message.date,
                     "unread": message.unread,
                     "preview": message.preview,
+                    "has_attachments": message.has_attachments,
                 }
                 for message in data.messages
             ],
@@ -541,6 +542,16 @@ class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
                     # EasyIQ's class or team for the lesson, e.g. "6A". Empty
                     # for sources that do not carry one.
                     "class_name": a.activities,
+                    # The body of the entry, as the HTML EasyIQ authored, the
+                    # same form the Min Uddannelse notes are published in. For
+                    # a notice this is the whole point of the row: `title` is
+                    # only its first heading, so without this the text is lost.
+                    "description": a.description,
+                    # True for "Vigtig information" and other rows EasyIQ files
+                    # under no subject. They carry their own `start`, so the day
+                    # a notice belongs to survives instead of being flattened to
+                    # the top of the week.
+                    "is_notice": a.is_notice,
                 }
                 for a in data.weekplan[:MAX_ATTRIBUTE_ITEMS]
             ],

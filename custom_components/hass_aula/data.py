@@ -84,6 +84,10 @@ class MessagePreview:
     date: str | None
     unread: bool
     preview: str
+    #: Whether the newest message in the thread carries anything attached.
+    #: False when the thread's messages could not be fetched, since an
+    #: unreadable thread is not evidence of an attachment.
+    has_attachments: bool = False
 
 
 @dataclass
