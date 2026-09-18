@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
     from aula import AulaApiClient, Profile
     from aula.models import Appointment, EasyIQHomework, LibraryLoan
+    from aula.models.meebook_weekplan import MeebookTask
     from aula.models.momo_huskeliste import AssignmentReminder, TeamReminder
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -55,6 +56,14 @@ class EasyIQChildData:
 
     weekplan: list[Appointment] = field(default_factory=list)
     homework: list[EasyIQHomework] = field(default_factory=list)
+
+
+@dataclass
+class MeebookWeekplanData:
+    """Meebook tasks by child; None means next week could not be fetched."""
+
+    current: dict[int, list[MeebookTask]]
+    next_week: dict[int, list[MeebookTask]] | None
 
 
 @dataclass

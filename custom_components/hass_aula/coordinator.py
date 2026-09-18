@@ -45,6 +45,7 @@ from .data import (
     EasyIQChildData,
     HuskelistenChildData,
     LibraryChildData,
+    MeebookWeekplanData,
     MessagePreview,
     MessagesData,
     WidgetContext,
@@ -700,22 +701,8 @@ class AulaEasyIQCoordinator(
         return dict(results)
 
 
-class _MeebookWeekplanData:
-    """Data container for Meebook tasks (current + next week)."""
-
-    __slots__ = ("current", "next_week")
-
-    def __init__(
-        self,
-        current: dict[int, list[MeebookTask]],
-        next_week: dict[int, list[MeebookTask]],
-    ) -> None:
-        self.current = current
-        self.next_week = next_week
-
-
 class AulaMeebookCoordinator(
-    _AulaWidgetCoordinator[_MeebookWeekplanData],
+    _AulaWidgetCoordinator[MeebookWeekplanData],
 ):
     """Coordinator for fetching Meebook weekplan data."""
 
@@ -759,7 +746,7 @@ class AulaMeebookCoordinator(
 
         return result
 
-    async def _async_update_data(self) -> _MeebookWeekplanData:
+    async def _async_update_data(self) -> MeebookWeekplanData:
         """Fetch Meebook tasks for current and next week."""
         now = dt_util.now()
         current_week = now.strftime("%G-W%V")
@@ -769,7 +756,7 @@ class AulaMeebookCoordinator(
             current = await self._fetch_week(current_week)
             next_week_data = await self._fetch_week(next_week)
 
-        return _MeebookWeekplanData(current=current, next_week=next_week_data)
+        return MeebookWeekplanData(current=current, next_week=next_week_data)
 
 
 class AulaHuskelistenCoordinator(
