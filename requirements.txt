@@ -3,6 +3,6 @@ homeassistant==2026.4.4
 pip>=26.2.1
 ruff==0.16.7
 aula==1.11.0
-pytest==9.0.0
+pytest==9.1.1
 # Must match the Home Assistant version pinned above.
 pytest-homeassistant-custom-component==0.13.325
