@@ -43,13 +43,28 @@ async def async_setup_entry(
     )
 
 
+def _names(names: list[str], fallback: str | None) -> list[str]:
+    """Return the full name list, falling back to the single-name field."""
+    if names:
+        return names
+    return [fallback] if fallback else []
+
+
 def _convert_event(event: AulaCalendarEvent) -> CalendarEvent:
     """Convert an Aula calendar event to a HA calendar event."""
     description_parts: list[str] = []
-    if event.teacher_name:
-        description_parts.append(f"Teacher: {event.teacher_name}")
-    if event.has_substitute and event.substitute_name:
-        description_parts.append(f"Substitute: {event.substitute_name}")
+    # A lesson often has more than one adult attached; aula merges the rows
+    # Aula sends per adult and lists them all here, so name every one of them
+    # rather than only whoever happened to come first.
+    teachers = _names(event.teacher_names, event.teacher_name)
+    if teachers:
+        label = "Teachers" if len(teachers) > 1 else "Teacher"
+        description_parts.append(f"{label}: {', '.join(teachers)}")
+    if event.has_substitute:
+        substitutes = _names(event.substitute_names, event.substitute_name)
+        if substitutes:
+            label = "Substitutes" if len(substitutes) > 1 else "Substitute"
+            description_parts.append(f"{label}: {', '.join(substitutes)}")
     if event.location:
         description_parts.append(f"Location: {event.location}")
 

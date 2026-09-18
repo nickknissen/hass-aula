@@ -315,6 +315,7 @@ def _message_preview(
     sender: str | None = None
     sent_at: str | None = None
     preview = ""
+    has_attachments = False
 
     if isinstance(messages, BaseException):
         LOGGER.warning(
@@ -326,6 +327,7 @@ def _message_preview(
         sender = message_raw.get("sender", {}).get("fullName")
         sent_at = message_raw.get("sendDateTime")
         preview = message.content[:MAX_PREVIEW_CHARS]
+        has_attachments = message.has_attachments
 
     return MessagePreview(
         thread_id=thread.thread_id,
@@ -334,6 +336,7 @@ def _message_preview(
         date=sent_at or thread_raw.get("lastUpdatedDate"),
         unread=thread.thread_id in unread_ids,
         preview=preview,
+        has_attachments=has_attachments,
     )
 
 

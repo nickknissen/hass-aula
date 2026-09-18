@@ -198,8 +198,17 @@ def mock_calendar_event(
     substitute_name: str | None = None,
     location: str | None = None,
     belongs_to: int = 1,
+    teacher_names: list[str] | None = None,
+    substitute_names: list[str] | None = None,
 ) -> MagicMock:
-    """Create a mock CalendarEvent object."""
+    """
+    Create a mock CalendarEvent object.
+
+    ``teacher_names``/``substitute_names`` default to the singular field, which
+    is what the aula package produces for a lesson with one adult. Setting them
+    explicitly matters: they are on the spec, so leaving them unset would hand
+    back a MagicMock that reads as a non-empty list.
+    """
     event = MagicMock(spec=CalendarEvent)
     event.id = event_id
     event.title = title
@@ -210,6 +219,16 @@ def mock_calendar_event(
     event.substitute_name = substitute_name
     event.location = location
     event.belongs_to = belongs_to
+    event.teacher_names = (
+        teacher_names
+        if teacher_names is not None
+        else ([teacher_name] if teacher_name else [])
+    )
+    event.substitute_names = (
+        substitute_names
+        if substitute_names is not None
+        else ([substitute_name] if substitute_name else [])
+    )
     return event
 
 
@@ -258,13 +277,20 @@ def mock_message(
     content: str = "Kære forældre, på fredag holder vi skolefest.",
     sender: str | None = "Anne Jensen",
     send_date: str | None = "2026-08-10T07:15:00+00:00",
+    has_attachments: bool = False,
 ) -> MagicMock:
-    """Create a mock Message object."""
+    """
+    Create a mock Message object.
+
+    ``has_attachments`` is pinned rather than left to the spec, which would
+    hand back a MagicMock that reads as True.
+    """
     message = MagicMock(spec=Message)
     message.id = message_id
     message.content_html = f"<p>{content}</p>"
     message.content = content
     message.content_markdown = content
+    message.has_attachments = has_attachments
     message._raw = {
         "id": message_id,
         "sender": {"fullName": sender} if sender else {},
@@ -338,16 +364,24 @@ def mock_appointment(
     start: str = "2024-01-15T09:00:00",
     end: str = "2024-01-15T10:00:00",
     activities: str = "6A",
+    description: str = "",
+    is_notice: bool = False,
 ) -> MagicMock:
-    """Create a mock Appointment object."""
+    """
+    Create a mock Appointment object.
+
+    ``is_notice`` is pinned rather than left to the spec, which would hand back
+    a MagicMock that reads as True.
+    """
     appt = MagicMock(spec=Appointment)
     appt.appointment_id = appointment_id
     appt.title = title
     appt.start = start
     appt.end = end
-    appt.description = ""
+    appt.description = description
     appt.activities = activities
     appt.item_type = None
+    appt.is_notice = is_notice
     return appt
 
 

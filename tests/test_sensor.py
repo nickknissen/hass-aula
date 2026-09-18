@@ -862,3 +862,116 @@ async def test_mu_weekly_notes_sensor_empty(
     state = hass.states.get("sensor.test_child_weekly_notes")
     assert state is not None
     assert state.state == "0"
+
+
+async def test_easyiq_weekplan_sensor_keeps_notice_text_and_day(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """A "Vigtig information" notice keeps its body and the day it belongs to."""
+    notice = mock_appointment(
+        title="Vigtig information",
+        start="2024-01-18T00:00:00",
+        end="2024-01-18T00:00:00",
+        activities="",
+        description="<p>Tur til Karlsgaarde med bus. Husk gummistoevler.</p>",
+        is_notice=True,
+    )
+    mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(return_value=[notice])
+    mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
+
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_weekplan")
+    assert state is not None
+    appointment = state.attributes["appointments"][0]
+    assert appointment["is_notice"] is True
+    # Without the body the notice is just a heading and the text is lost.
+    assert "Karlsgaarde" in appointment["description"]
+    # The day the notice was filed under, rather than the top of the week.
+    assert appointment["start"] == "2024-01-18T00:00:00"
+
+
+async def test_easyiq_weekplan_sensor_marks_lessons_as_not_notices(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An ordinary lesson is not flagged as a notice."""
+    mock_aula_client.widgets.get_easyiq_weekplan = AsyncMock(
+        return_value=[mock_appointment()]
+    )
+    mock_aula_client.widgets.get_easyiq_homework = AsyncMock(return_value=[])
+
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_HOMEWORK]
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_weekplan")
+    assert state is not None
+    assert state.attributes["appointments"][0]["is_notice"] is False
+
+
+async def test_latest_messages_sensor_reports_attachments(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """A message carrying an attachment is flagged as such."""
+    from .conftest import mock_message, mock_message_thread
+
+    threads = [
+        mock_message_thread(thread_id="1", subject="Skolefest"),
+        mock_message_thread(thread_id="2", subject="Lejrskole"),
+    ]
+    mock_aula_client.get_message_threads = AsyncMock(
+        side_effect=lambda filter_on=None: [] if filter_on == "unread" else threads
+    )
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        side_effect=lambda thread_id, **_: [
+            mock_message(content="Se vedhaeftede", has_attachments=thread_id == "1")
+        ]
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    messages = state.attributes["messages"]
+    assert messages[0]["has_attachments"] is True
+    assert messages[1]["has_attachments"] is False
+
+
+async def test_latest_messages_sensor_reports_no_attachments_on_failure(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An unreadable thread is not evidence of an attachment."""
+    from .conftest import mock_message_thread
+
+    mock_aula_client.get_message_threads = AsyncMock(
+        side_effect=lambda filter_on=None: (
+            [] if filter_on == "unread" else [mock_message_thread(thread_id="1")]
+        )
+    )
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        side_effect=AulaConnectionError("boom")
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_parent_latest_messages")
+    assert state is not None
+    assert state.attributes["messages"][0]["has_attachments"] is False
