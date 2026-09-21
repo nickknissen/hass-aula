@@ -1,7 +1,7 @@
 colorlog==6.12.0
 homeassistant==2026.4.4
 pip>=26.2.1
-ruff==0.16.7
+ruff==0.16.8
 aula==1.11.0
 pytest==9.0.0
 # Must match the Home Assistant version pinned above.
