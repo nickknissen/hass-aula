@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from aula import (
     AulaAuthenticationError,
@@ -37,6 +38,7 @@ from .const import (
     MU_UGEPLAN_POLL_INTERVAL,
     NOTIFICATIONS_POLL_INTERVAL,
     PRESENCE_POLL_INTERVAL,
+    TRANSIENT_FAILURE_TOLERANCE,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_WEEKPLAN,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
@@ -52,7 +54,7 @@ from .data import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable, Coroutine
 
     from aula import AulaApiClient, Child, Profile
     from aula.models.meebook_weekplan import MeebookTask
@@ -86,6 +88,43 @@ async def _aula_api_errors(
     except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
         msg = f"Error communicating with Aula API: {err}"
         raise UpdateFailed(msg) from err
+
+
+class _TransientFailureTolerance:
+    """Mixin holding the consecutive transient failure counter."""
+
+    _transient_failures: int = 0
+
+
+def _tolerate_transient_failures[DataT](
+    func: Callable[[Any], Coroutine[Any, Any, DataT]],
+) -> Callable[[Any], Coroutine[Any, Any, DataT]]:
+    """Keep the previous data for up to TRANSIENT_FAILURE_TOLERANCE failed polls."""
+
+    @functools.wraps(func)
+    async def _wrapper(self: Any) -> DataT:
+        try:
+            data = await func(self)
+        except UpdateFailed as err:
+            # Only a success resets the count, so a long outage stays unavailable.
+            self._transient_failures += 1
+            if (
+                self.data is None
+                or self._transient_failures > TRANSIENT_FAILURE_TOLERANCE
+            ):
+                raise
+            LOGGER.debug(
+                "Transient failure %s/%s fetching %s data, keeping previous data: %s",
+                self._transient_failures,
+                TRANSIENT_FAILURE_TOLERANCE,
+                self.name,
+                err,
+            )
+            return cast("DataT", self.data)
+        self._transient_failures = 0
+        return data
+
+    return _wrapper
 
 
 def _get_child_widget_id(child: Child) -> str:
@@ -125,6 +164,7 @@ class _PresenceChildData:
 
 
 class AulaPresenceCoordinator(
+    _TransientFailureTolerance,
     DataUpdateCoordinator[dict[int, _PresenceChildData]],
 ):
     """Coordinator for fetching presence data for all children."""
@@ -149,6 +189,7 @@ class AulaPresenceCoordinator(
         self.profile = profile
         self.token_manager = token_manager
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, _PresenceChildData]:
         """Fetch presence data and today's templates for all children."""
         child_ids = [child.id for child in self.profile.children]
@@ -201,6 +242,7 @@ def _extract_self_decider_times(
 
 
 class AulaCalendarCoordinator(
+    _TransientFailureTolerance,
     DataUpdateCoordinator[dict[int, list[CalendarEvent]]],
 ):
     """Coordinator for fetching calendar events for all children."""
@@ -225,6 +267,7 @@ class AulaCalendarCoordinator(
         self.profile = profile
         self.token_manager = token_manager
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, list[CalendarEvent]]:
         """Fetch calendar events for all children."""
         async with _aula_api_errors(self.token_manager):
@@ -249,6 +292,7 @@ class AulaCalendarCoordinator(
 
 
 class AulaNotificationsCoordinator(
+    _TransientFailureTolerance,
     DataUpdateCoordinator[list[Notification]],
 ):
     """Coordinator for fetching notifications for the active profile."""
@@ -272,6 +316,7 @@ class AulaNotificationsCoordinator(
         self.token_manager = token_manager
         self._known_ids: set[str] | None = None
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> list[Notification]:
         """Fetch notifications for the active profile."""
         async with _aula_api_errors(self.token_manager):
@@ -341,6 +386,7 @@ def _message_preview(
 
 
 class AulaMessagesCoordinator(
+    _TransientFailureTolerance,
     DataUpdateCoordinator[MessagesData],
 ):
     """Coordinator for fetching the latest message threads for the active profile."""
@@ -363,6 +409,7 @@ class AulaMessagesCoordinator(
         self.client = client
         self.token_manager = token_manager
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> MessagesData:
         """Fetch the latest threads plus the newest message in each."""
         async with _aula_api_errors(self.token_manager):
@@ -389,7 +436,7 @@ class AulaMessagesCoordinator(
         )
 
 
-class _AulaWidgetCoordinator[T](DataUpdateCoordinator[T]):
+class _AulaWidgetCoordinator[T](_TransientFailureTolerance, DataUpdateCoordinator[T]):
     """Shared base for all widget coordinators."""
 
     config_entry: AulaConfigEntry
@@ -457,6 +504,7 @@ class AulaLibraryCoordinator(
             update_interval=timedelta(seconds=LIBRARY_POLL_INTERVAL),
         )
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, LibraryChildData]:
         """Fetch library status and distribute to children."""
         async with _aula_api_errors(self.token_manager):
@@ -520,6 +568,7 @@ class AulaMUTasksCoordinator(
             update_interval=timedelta(seconds=MU_TASKS_POLL_INTERVAL),
         )
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, list[MUTask]]:
         """Fetch MU tasks and distribute to children."""
         week = dt_util.now().strftime("%G-W%V")
@@ -604,6 +653,7 @@ class AulaMUUgeplanCoordinator(
 
         return result
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> _MUUgeplanData:
         """Fetch MU weekly notes for current and next week."""
         now = dt_util.now()
@@ -641,6 +691,7 @@ class AulaEasyIQCoordinator(
             update_interval=timedelta(seconds=EASYIQ_POLL_INTERVAL),
         )
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, EasyIQChildData]:
         """Fetch EasyIQ weekplan and homework per child."""
         week = dt_util.now().strftime("%G-W%V")
@@ -749,6 +800,7 @@ class AulaMeebookCoordinator(
 
         return result
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> MeebookWeekplanData:
         """Fetch Meebook tasks for current and next week."""
         now = dt_util.now()
@@ -792,6 +844,7 @@ class AulaHuskelistenCoordinator(
             update_interval=timedelta(seconds=HUSKELISTEN_POLL_INTERVAL),
         )
 
+    @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, HuskelistenChildData]:
         """Fetch Huskelisten reminders and distribute to children."""
         now = dt_util.now()

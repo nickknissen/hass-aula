@@ -7,14 +7,16 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from aula import AulaConnectionError
+from aula import AulaConnectionError, AulaServerError
 from aula.models.presence import PresenceState
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import JSONEncoder
 
 from custom_components.hass_aula.const import (
     MAX_MESSAGE_ITEMS,
+    TRANSIENT_FAILURE_TOLERANCE,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
@@ -155,6 +157,43 @@ async def test_presence_sensor_attributes(
     # The recorder and the websocket API both JSON-encode state attributes, so
     # publishing the object itself breaks them rather than the assertion above.
     json.dumps(dict(state.attributes), cls=JSONEncoder)
+
+
+async def test_presence_sensor_survives_a_transient_api_failure(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test one failed poll does not flip the sensor to unavailable."""
+    mock_aula_client.get_daily_overview = AsyncMock(
+        return_value=mock_daily_overview(location="Room 1")
+    )
+    mock_aula_client.get_presence_templates = AsyncMock(return_value=[])
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_id = "sensor.test_child_presence_status"
+    assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
+
+    # Aula answers a poll with 503, as it does sporadically in practice.
+    mock_aula_client.get_daily_overview = AsyncMock(
+        side_effect=AulaServerError("Server error", 503)
+    )
+    await entry.runtime_data.presence_coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state.state != STATE_UNAVAILABLE
+    assert state.attributes["location"] == "Room 1"
+
+    # A sustained outage still marks it unavailable.
+    for _ in range(TRANSIENT_FAILURE_TOLERANCE):
+        await entry.runtime_data.presence_coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
 
 
 async def test_sensor_unavailable_when_no_overview(
@@ -676,7 +715,10 @@ async def test_meebook_sensor_partial_failure_and_recovery(
         AulaConnectionError("offline", 0),
         [],
         [plan],
-        AulaConnectionError("offline", 0),
+        *(
+            AulaConnectionError("offline", 0)
+            for _ in range(TRANSIENT_FAILURE_TOLERANCE + 1)
+        ),
     ]
     entry = make_widget_config_entry(widgets=[WIDGET_MEEBOOK])
     entry.add_to_hass(hass)
@@ -697,12 +739,23 @@ async def test_meebook_sensor_partial_failure_and_recovery(
     assert state.state == "0"
     assert state.attributes["next_week_available"] is True
     assert len(state.attributes["next_week_tasks"]) == 1
+    # A failed current week keeps the previous data through a transient blip
+    # and only marks the sensor unavailable once the failures persist.
+    for _ in range(TRANSIENT_FAILURE_TOLERANCE):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        state = hass.states.get("sensor.test_child_meebook_weekplan")
+        assert state is not None
+        assert state.state == "0"
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     state = hass.states.get("sensor.test_child_meebook_weekplan")
     assert state is not None
     assert state.state == "unavailable"
-    assert mock_aula_client.widgets.get_meebook_weekplan.await_count == 7
+    assert (
+        mock_aula_client.widgets.get_meebook_weekplan.await_count
+        == 7 + TRANSIENT_FAILURE_TOLERANCE
+    )
 
 
 async def test_meebook_weekplan_sensor_next_week_when_current_empty(

@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.hass_aula.const import (
     MAX_PREVIEW_CHARS,
+    TRANSIENT_FAILURE_TOLERANCE,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
 )
@@ -182,6 +183,62 @@ async def test_presence_coordinator_server_error(hass: HomeAssistant) -> None:
     entry = _create_config_entry()
     coordinator.config_entry = entry
 
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_presence_coordinator_tolerates_transient_failures(
+    hass: HomeAssistant,
+) -> None:
+    """Test a short-lived 5xx keeps the previous data instead of going stale."""
+    client = AsyncMock()
+    overview = mock_daily_overview()
+    client.get_daily_overview = AsyncMock(return_value=overview)
+    client.get_presence_templates = AsyncMock(return_value=[])
+
+    profile = mock_profile()
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    coordinator.data = await coordinator._async_update_data()
+    previous = coordinator.data
+
+    client.get_daily_overview = AsyncMock(
+        side_effect=AulaServerError("Server error", 503)
+    )
+    for _ in range(TRANSIENT_FAILURE_TOLERANCE):
+        assert await coordinator._async_update_data() is previous
+
+    # A sustained outage still surfaces, and keeps surfacing.
+    for _ in range(2):
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+    # Recovery resets the budget.
+    client.get_daily_overview = AsyncMock(return_value=overview)
+    coordinator.data = await coordinator._async_update_data()
+    client.get_daily_overview = AsyncMock(
+        side_effect=AulaServerError("Server error", 503)
+    )
+    assert await coordinator._async_update_data() is coordinator.data
+
+
+async def test_presence_coordinator_transient_tolerance_needs_data(
+    hass: HomeAssistant,
+) -> None:
+    """Test the first-ever poll still fails loudly, with nothing to fall back on."""
+    client = AsyncMock()
+    client.get_daily_overview = AsyncMock(
+        side_effect=AulaServerError("Server error", 503)
+    )
+
+    profile = mock_profile()
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    assert coordinator.data is None
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
 

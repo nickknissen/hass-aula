@@ -97,6 +97,8 @@ EASYIQ_POLL_INTERVAL = 1800  # 30 minutes
 MEEBOOK_POLL_INTERVAL = 3600  # 60 minutes
 HUSKELISTEN_POLL_INTERVAL = 1800  # 30 minutes
 
+TRANSIENT_FAILURE_TOLERANCE = 2  # failed polls in a row that keep the last data
+
 # Latest-messages sensor shaping
 MAX_MESSAGE_ITEMS = 5
 MAX_PREVIEW_CHARS = 200

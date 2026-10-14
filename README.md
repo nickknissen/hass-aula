@@ -411,6 +411,10 @@ automation:
 | Notifications | Every 5 minutes |
 | School calendar | Every 60 minutes |
 
+If a poll fails with a connection problem, server error or rate limit, entities
+keep their last data for up to two failed polls in a row. They go unavailable
+on the third.
+
 ---
 
 ## Troubleshooting

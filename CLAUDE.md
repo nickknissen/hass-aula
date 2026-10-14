@@ -33,7 +33,7 @@ Steps: `user` → `mitid_auth` (background auth task) → `mitid_qr` (animated Q
 
 ### Coordinators (`coordinator.py`)
 
-All extend `DataUpdateCoordinator`. Error handling centralized in `_aula_api_errors` context manager (maps Aula exceptions → HA exceptions, auto-refreshes tokens on auth errors). Widget coordinators extend `_AulaWidgetCoordinator` which adds name-based child matching.
+All extend `DataUpdateCoordinator`. Error handling centralized in `_aula_api_errors` context manager (maps Aula exceptions → HA exceptions, auto-refreshes tokens on auth errors). Every `_async_update_data` is wrapped in `@_tolerate_transient_failures`, which keeps the previous data for up to `TRANSIENT_FAILURE_TOLERANCE` consecutive `UpdateFailed`s; a new coordinator needs the decorator and the `_TransientFailureTolerance` mixin, which `_AulaWidgetCoordinator` already includes. Widget coordinators extend `_AulaWidgetCoordinator` which adds name-based child matching.
 
 | Coordinator | Poll interval |
 |---|---|
