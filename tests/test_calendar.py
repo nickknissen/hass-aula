@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import AsyncMock
 
+from aula import HttpRequestError
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from custom_components.hass_aula.calendar import _convert_event
 
@@ -105,6 +108,35 @@ async def test_calendar_event_with_location(
 
     state = hass.states.get("calendar.test_child_school_calendar")
     assert state is not None
+
+
+async def test_calendar_get_events_api_error(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test a failed range fetch shows an empty range, not an error."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    mock_aula_client.get_calendar_events = AsyncMock(
+        side_effect=HttpRequestError("Aula rejected method (status code 1)", 200)
+    )
+    start = dt_util.now()
+    response = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": "calendar.test_child_school_calendar",
+            "start_date_time": start,
+            "end_date_time": start + timedelta(days=7),
+        },
+        blocking=True,
+        return_response=True,
+    )
+
+    assert response == {"calendar.test_child_school_calendar": {"events": []}}
 
 
 def test_convert_event_names_every_teacher() -> None:

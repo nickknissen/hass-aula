@@ -4,13 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from aula import (
-    AulaAuthenticationError,
-    AulaConnectionError,
-    AulaRateLimitError,
-    AulaServerError,
-)
 from aula import CalendarEvent as AulaCalendarEvent
+from aula import HttpRequestError
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.util import dt as dt_util
 
@@ -117,12 +112,7 @@ class AulaCalendarEntity(AulaEntity[AulaCalendarCoordinator], CalendarEntity):
                 start=start_date,
                 end=end_date,
             )
-        except (
-            AulaAuthenticationError,
-            AulaConnectionError,
-            AulaServerError,
-            AulaRateLimitError,
-        ):
+        except HttpRequestError:
             return []
 
         return [_convert_event(event) for event in events]

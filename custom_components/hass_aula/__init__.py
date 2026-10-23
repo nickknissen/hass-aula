@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING
 
 from aula import (
     AulaAuthenticationError,
-    AulaConnectionError,
-    AulaRateLimitError,
-    AulaServerError,
+    HttpRequestError,
     create_client,
 )
 from aula.http_httpx import HttpxHttpClient
@@ -27,6 +25,7 @@ from .const import (
     LOGGER,
     MEEBOOK_PROVIDER_WIDGETS,
     MU_TASK_WIDGETS,
+    MU_UGEPLAN_WIDGETS,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
@@ -108,6 +107,20 @@ def _mu_task_widget_id(entry: AulaConfigEntry) -> str | None:
     )
 
 
+def _mu_ugeplan_widget_id(entry: AulaConfigEntry) -> str | None:
+    """
+    Return the widget to mint MinUddannelse ugenoter tokens with.
+
+    As with opgaver, a school that lists only the SSO widget (0023) still has
+    weekly letters, fetched with a 0023 token. Prefer the Ugenoter widget
+    (0029) where both are present.
+    """
+    return next(
+        (w for w in MU_UGEPLAN_WIDGETS if is_widget_enabled(entry, w)),
+        None,
+    )
+
+
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
     """Create HTTP client in a thread to avoid blocking SSL cert loading."""
     return HttpxHttpClient(cookies=cookies)
@@ -147,12 +160,7 @@ async def _try_build_widget_context(
 
     try:
         return await _build_widget_context(client, profile)
-    except (
-        AulaAuthenticationError,
-        AulaConnectionError,
-        AulaServerError,
-        AulaRateLimitError,
-    ) as err:
+    except HttpRequestError as err:
         LOGGER.warning("Failed to build widget context, skipping widgets: %s", err)
         return None
 
@@ -179,9 +187,10 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager, mu_task_widget
         )
 
-    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_UGEPLAN):
+    mu_ugeplan_widget = _mu_ugeplan_widget_id(entry)
+    if mu_ugeplan_widget:
         wc.mu_ugeplan = AulaMUUgeplanCoordinator(
-            hass, client, profile, widget_context, token_manager
+            hass, client, profile, widget_context, token_manager, mu_ugeplan_widget
         )
 
     if is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN) or is_widget_enabled(
@@ -265,7 +274,7 @@ async def async_setup_entry(
                 translation_domain=DOMAIN,
                 translation_key="auth_failed",
             ) from refresh_err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
         await http_client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
@@ -284,13 +293,13 @@ async def async_setup_entry(
                 translation_domain=DOMAIN,
                 translation_key="auth_failed",
             ) from refresh_err
-        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+        except HttpRequestError as err:
             await client.close()
             raise ConfigEntryNotReady(
                 translation_domain=DOMAIN,
                 translation_key="connection_failed",
             ) from err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
         await client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,

@@ -7,6 +7,7 @@ from logging import Logger, getLogger
 from aula import ActivityType
 from aula.const import (
     MIN_UDDANNELSE_TASK_WIDGETS,
+    MIN_UDDANNELSE_UGEPLAN_WIDGETS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
     WIDGET_EASYIQ_WEEKPLAN,
@@ -113,6 +114,10 @@ LEGACY_WIDGET_EASYIQ = "0001"
 # preferred first. Re-exported from the aula package so the fallback order and
 # the set of widgets we offer stay in step.
 MU_TASK_WIDGETS: tuple[str, ...] = MIN_UDDANNELSE_TASK_WIDGETS
+
+# Likewise for the weekly letters (ugenoter): a school without the Ugenoter
+# widget can still have them, fetched with an SSO widget token.
+MU_UGEPLAN_WIDGETS: tuple[str, ...] = MIN_UDDANNELSE_UGEPLAN_WIDGETS
 
 # Some Aula accounts advertise Meebook through the alternate "Meebook overblik"
 # widget (0119) instead of the legacy weekplan widget (0004). The Meebook

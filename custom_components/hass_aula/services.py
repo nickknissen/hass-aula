@@ -7,12 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import voluptuous as vol
-from aula import (
-    AulaAuthenticationError,
-    AulaConnectionError,
-    AulaRateLimitError,
-    AulaServerError,
-)
+from aula import AulaAuthenticationError, HttpRequestError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_AREA_ID, ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import SupportsResponse, callback
@@ -290,7 +285,7 @@ async def _async_call_aula[T](
             translation_domain=DOMAIN,
             translation_key="auth_failed",
         ) from err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="action_failed",

@@ -291,11 +291,8 @@ def mock_message(
     message.content = content
     message.content_markdown = content
     message.has_attachments = has_attachments
-    message._raw = {
-        "id": message_id,
-        "sender": {"fullName": sender} if sender else {},
-        "sendDateTime": send_date,
-    }
+    message.sender_name = sender
+    message.send_datetime = datetime.fromisoformat(send_date) if send_date else None
     return message
 
 

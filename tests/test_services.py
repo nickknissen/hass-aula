@@ -10,7 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import voluptuous as vol
 import yaml
-from aula import ActivityType, AulaAuthenticationError, AulaConnectionError
+from aula import (
+    ActivityType,
+    AulaAuthenticationError,
+    AulaConnectionError,
+    HttpRequestError,
+)
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
@@ -451,6 +456,26 @@ async def test_connection_error_raises(
     await _setup_integration(hass, mock_aula_client)
     mock_aula_client.update_presence_template = AsyncMock(
         side_effect=AulaConnectionError("boom", 500)
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await _call(
+            hass,
+            **{ATTR_DEVICE_ID: [_device_id(hass, 1)]},
+            entry_time="08:00:00",
+            exit_time="15:30:00",
+            exit_with="Far",
+        )
+
+
+async def test_api_error_envelope_raises(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """An error code in a 200 response surfaces as a HomeAssistantError."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.update_presence_template = AsyncMock(
+        side_effect=HttpRequestError("Aula rejected method (status code 1)", 200)
     )
 
     with pytest.raises(HomeAssistantError):

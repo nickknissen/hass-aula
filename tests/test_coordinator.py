@@ -11,6 +11,7 @@ from aula import (
     AulaConnectionError,
     AulaRateLimitError,
     AulaServerError,
+    HttpRequestError,
 )
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from freezegun.api import FrozenDateTimeFactory
@@ -23,6 +24,7 @@ from custom_components.hass_aula.const import (
     TRANSIENT_FAILURE_TOLERANCE,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from custom_components.hass_aula.coordinator import (
     AulaCalendarCoordinator,
@@ -256,6 +258,23 @@ async def test_presence_coordinator_rate_limit_error(hass: HomeAssistant) -> Non
 
     entry = _create_config_entry()
     coordinator.config_entry = entry
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_presence_coordinator_api_error_envelope(hass: HomeAssistant) -> None:
+    """Test an error code in a 200 response fails the update cleanly."""
+    client = AsyncMock()
+    # aula raises the base class itself for an explicit error envelope.
+    client.get_daily_overview = AsyncMock(
+        side_effect=HttpRequestError("Aula rejected method (status code 1)", 200)
+    )
+
+    profile = mock_profile()
+    tm = _create_token_manager()
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
+    coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
@@ -711,6 +730,26 @@ async def test_easyiq_coordinator_wrong_child_session(hass: HomeAssistant) -> No
         await coordinator._async_update_data()
 
 
+async def test_easyiq_coordinator_children_not_identified(
+    hass: HomeAssistant,
+) -> None:
+    """Test aula's refusal to guess between several children fails the update."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    refusal = RuntimeError("EasyIQ's portal did not identify the children")
+    client.widgets.get_easyiq_weekplan = AsyncMock(side_effect=refusal)
+    client.widgets.get_easyiq_homework = AsyncMock(side_effect=refusal)
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaEasyIQCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed, match="could not tell the children apart"):
+        await coordinator._async_update_data()
+
+
 # --- Meebook Coordinator Tests ---
 
 
@@ -1007,7 +1046,9 @@ async def test_mu_ugeplan_coordinator_fetch(hass: HomeAssistant) -> None:
     profile = mock_profile()
     ctx = _create_widget_context()
     tm = _create_token_manager()
-    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUUgeplanCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_UGEPLAN
+    )
     coordinator.config_entry = _create_config_entry()
 
     data = await coordinator._async_update_data()
@@ -1018,6 +1059,28 @@ async def test_mu_ugeplan_coordinator_fetch(hass: HomeAssistant) -> None:
     assert 1 in data.next_week
     assert len(data.next_week[1]) == 1
     assert data.next_week[1][0].week_number == 6
+
+
+async def test_mu_ugeplan_coordinator_uses_its_widget(hass: HomeAssistant) -> None:
+    """Test the coordinator mints tokens with the widget it was given."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_ugeplan = AsyncMock(return_value=[])
+
+    coordinator = AulaMUUgeplanCoordinator(
+        hass,
+        client,
+        mock_profile(),
+        _create_widget_context(),
+        _create_token_manager(),
+        WIDGET_MIN_UDDANNELSE_SSO,
+    )
+    coordinator.config_entry = _create_config_entry()
+
+    await coordinator._async_update_data()
+
+    for request in client.widgets.get_ugeplan.await_args_list:
+        assert request.kwargs["widget_id"] == WIDGET_MIN_UDDANNELSE_SSO
 
 
 async def test_mu_ugeplan_coordinator_auth_error(hass: HomeAssistant) -> None:
@@ -1034,7 +1097,9 @@ async def test_mu_ugeplan_coordinator_auth_error(hass: HomeAssistant) -> None:
     tm.async_refresh_and_rebuild_client = AsyncMock(
         side_effect=AulaAuthenticationError("Refresh failed", 0)
     )
-    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUUgeplanCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_UGEPLAN
+    )
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(ConfigEntryAuthFailed):
@@ -1052,7 +1117,9 @@ async def test_mu_ugeplan_coordinator_connection_error(hass: HomeAssistant) -> N
     profile = mock_profile()
     ctx = _create_widget_context()
     tm = _create_token_manager()
-    coordinator = AulaMUUgeplanCoordinator(hass, client, profile, ctx, tm)
+    coordinator = AulaMUUgeplanCoordinator(
+        hass, client, profile, ctx, tm, WIDGET_MIN_UDDANNELSE_UGEPLAN
+    )
     coordinator.config_entry = _create_config_entry()
 
     with pytest.raises(UpdateFailed):
@@ -1084,6 +1151,7 @@ async def test_messages_coordinator_builds_previews(hass: HomeAssistant) -> None
     assert len(data.messages) == 2
     assert data.messages[0].subject == "Skolefest"
     assert data.messages[0].sender == "Anne Jensen"
+    assert data.messages[0].date == "2026-08-10T07:15:00+00:00"
     assert data.messages[0].preview == "Kære forældre"
     assert data.messages[0].unread is True
     assert data.messages[1].unread is False
