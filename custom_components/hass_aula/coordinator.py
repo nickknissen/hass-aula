@@ -15,6 +15,7 @@ from aula import (
     HttpRequestError,
 )
 from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
+from aula.models.meeting_booking import MEETING_TYPES
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -52,8 +53,10 @@ from .data import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
+    from datetime import datetime
 
     from aula import AulaApiClient, Child, Profile
+    from aula.models import MeetingBooking
     from aula.models.meebook_weekplan import MeebookTask
     from aula.models.mu_weekly_letter import MUWeeklyLetter
     from aula.models.presence_template import PresenceWeekTemplate
@@ -241,6 +244,83 @@ def _extract_self_decider_times(
     return result
 
 
+def _is_meeting(event: CalendarEvent) -> bool:
+    """Return True for a parent meeting row from Aula's calendar."""
+    # TODO(aula-package): CalendarEvent does not expose the row's type as a  # noqa: TD003, FIX002, E501
+    # public field. Add CalendarEvent.event_type, then replace this _raw access.
+    raw = event._raw or {}  # noqa: SLF001
+    return raw.get("type") in MEETING_TYPES
+
+
+def _booking_event(booking: MeetingBooking) -> CalendarEvent:
+    """Shape a booked meeting slot as a calendar event."""
+    return CalendarEvent(
+        id=booking.meeting_id,
+        title=booking.title,
+        start_datetime=booking.start_datetime,
+        end_datetime=booking.end_datetime,
+        teacher_name=None,
+        has_substitute=False,
+        substitute_name=None,
+        location=booking.location,
+        belongs_to=booking.child_id,
+    )
+
+
+async def async_fetch_meeting_bookings(
+    client: AulaApiClient,
+    child_ids: list[int],
+    events: list[CalendarEvent],
+    start: datetime,
+    end: datetime,
+) -> dict[int, list[MeetingBooking]]:
+    """
+    Fetch each child's booked parent meeting slots for a calendar range.
+
+    Aula's calendar row for a parent meeting spans the whole booking period,
+    often days, and is filed under only the first child it names. The booked
+    slots come from a separate read, made only when the range holds a meeting
+    at all. ``start`` and ``end`` are widened to the whole days the calendar
+    read covers.
+
+    A failed read leaves that child's meetings as Aula's calendar shows them
+    rather than failing the calendar; authentication errors still propagate.
+    """
+    if not any(_is_meeting(event) for event in events):
+        return {}
+
+    day_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = end.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+    async def _child_bookings(child_id: int) -> list[MeetingBooking]:
+        try:
+            return await client.get_meeting_bookings(child_id, day_start, day_end)
+        except AulaAuthenticationError:
+            raise
+        except HttpRequestError as err:
+            LOGGER.warning(
+                "Could not fetch booked meetings for child %s: %s", child_id, err
+            )
+            return []
+
+    bookings = await asyncio.gather(*(_child_bookings(cid) for cid in child_ids))
+    return dict(zip(child_ids, bookings, strict=True))
+
+
+def replace_booked_meetings(
+    events: list[CalendarEvent], bookings: list[MeetingBooking]
+) -> list[CalendarEvent]:
+    """
+    Show a child's booked meeting slots in place of the booking period.
+
+    A meeting the child has no booking for, such as an invitation not yet
+    answered, is left as Aula's calendar shows it.
+    """
+    booked = {booking.meeting_id for booking in bookings}
+    kept = [e for e in events if not (e.id in booked and _is_meeting(e))]
+    return kept + [_booking_event(booking) for booking in bookings]
+
+
 class AulaCalendarCoordinator(
     _TransientFailureTolerance,
     DataUpdateCoordinator[dict[int, list[CalendarEvent]]],
@@ -288,7 +368,16 @@ class AulaCalendarCoordinator(
             for event in events:
                 if event.belongs_to is not None and event.belongs_to in result:
                     result[event.belongs_to].append(event)
-            return result
+
+            bookings = await async_fetch_meeting_bookings(
+                self.client, all_child_ids, events, start, end
+            )
+            return {
+                child_id: replace_booked_meetings(
+                    child_events, bookings.get(child_id, [])
+                )
+                for child_id, child_events in result.items()
+            }
 
 
 class AulaNotificationsCoordinator(

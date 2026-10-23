@@ -229,6 +229,8 @@ Aula returns a separate row for every adult attached to a lesson. These are
 merged into a single event, so a co-taught lesson appears once, with every
 teacher named in the event description.
 
+A booked parent meeting shows at the time slot you booked for that child. In Aula's own calendar data a meeting spans the whole period parents can book in, often several days. A meeting you have not booked yet still shows that whole period.
+
 ---
 
 ## Actions

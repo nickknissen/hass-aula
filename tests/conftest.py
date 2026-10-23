@@ -9,7 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aula import CalendarEvent, DailyOverview, Profile
-from aula.models import Appointment, EasyIQHomework, LibraryLoan, MUTask
+from aula.models import (
+    Appointment,
+    EasyIQHomework,
+    LibraryLoan,
+    MeetingBooking,
+    MUTask,
+)
 from aula.models.child import Child
 from aula.models.library import LibraryStatus
 from aula.models.meebook_weekplan import MeebookDayPlan, MeebookStudentPlan, MeebookTask
@@ -200,6 +206,7 @@ def mock_calendar_event(
     belongs_to: int = 1,
     teacher_names: list[str] | None = None,
     substitute_names: list[str] | None = None,
+    event_type: str = "lesson",
 ) -> MagicMock:
     """
     Create a mock CalendarEvent object.
@@ -229,7 +236,28 @@ def mock_calendar_event(
         if substitute_names is not None
         else ([substitute_name] if substitute_name else [])
     )
+    event._raw = {"id": event_id, "type": event_type}
     return event
+
+
+def mock_meeting_booking(
+    meeting_id: int = 42,
+    child_id: int = 1,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    title: str = "Skole-hjem-samtale",
+    location: str | None = "Room 12",
+) -> MeetingBooking:
+    """Create a MeetingBooking for one booked slot."""
+    return MeetingBooking(
+        meeting_id=meeting_id,
+        child_id=child_id,
+        title=title,
+        meeting_type="school_home_meeting",
+        start_datetime=start or datetime(2024, 1, 16, 15, 20, tzinfo=UTC),
+        end_datetime=end or datetime(2024, 1, 16, 15, 40, tzinfo=UTC),
+        location=location,
+    )
 
 
 def mock_notification(
