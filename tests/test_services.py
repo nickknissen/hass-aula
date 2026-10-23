@@ -16,6 +16,7 @@ from aula import (
     AulaConnectionError,
     HttpRequestError,
 )
+from aula.api_client import ThreadScanLimitError
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
@@ -26,6 +27,7 @@ from custom_components.hass_aula import services
 from custom_components.hass_aula.const import (
     DOMAIN,
     SERVICE_GET_THREAD_MESSAGES,
+    SERVICE_MARK_THREAD_READ,
     SERVICE_UPDATE_PRESENCE,
 )
 
@@ -695,3 +697,91 @@ async def test_get_thread_messages_connection_error_raises(
             blocking=True,
             return_response=True,
         )
+
+
+async def test_mark_thread_read_marks_and_refreshes(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """The action marks the thread and refreshes the unread count."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.mark_thread_read = AsyncMock(return_value=True)
+    threads_fetched = mock_aula_client.get_message_threads.await_count
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_MARK_THREAD_READ,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    mock_aula_client.mark_thread_read.assert_awaited_once_with("42")
+    assert response == {"thread_id": "42", "marked": True}
+    assert mock_aula_client.get_message_threads.await_count > threads_fetched
+
+
+async def test_mark_thread_read_without_response(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """The action can be called without asking for a response."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.mark_thread_read = AsyncMock(return_value=False)
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_MARK_THREAD_READ,
+        {"thread_id": "42"},
+        blocking=True,
+    )
+
+    mock_aula_client.mark_thread_read.assert_awaited_once_with("42")
+
+
+async def test_mark_thread_read_refuses_shared_inbox(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """A thread outside the guardian's own mailbox is a user error."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.mark_thread_read = AsyncMock(
+        side_effect=ValueError("thread is not in the guardian's own mailbox")
+    )
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_THREAD_READ,
+            {"thread_id": "42"},
+            blocking=True,
+        )
+
+    assert exc_info.value.translation_key == "thread_not_in_own_mailbox"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ThreadScanLimitError("no message in the first 50 pages"),
+        HttpRequestError("Aula did not confirm the read marker", 200),
+    ],
+)
+async def test_mark_thread_read_failure_raises(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    error: Exception,
+) -> None:
+    """A thread aula could not mark surfaces as a HomeAssistantError."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.mark_thread_read = AsyncMock(side_effect=error)
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_THREAD_READ,
+            {"thread_id": "42"},
+            blocking=True,
+        )
+
+    assert exc_info.value.translation_key == "action_failed"

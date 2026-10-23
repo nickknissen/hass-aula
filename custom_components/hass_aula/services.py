@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import voluptuous as vol
 from aula import AulaAuthenticationError, HttpRequestError
+from aula.api_client import ThreadScanLimitError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_AREA_ID, ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import SupportsResponse, callback
@@ -38,6 +39,7 @@ from .const import (
     REPEAT_NEVER,
     REPEAT_PATTERNS,
     SERVICE_GET_THREAD_MESSAGES,
+    SERVICE_MARK_THREAD_READ,
     SERVICE_UPDATE_PRESENCE,
 )
 
@@ -78,6 +80,13 @@ GET_THREAD_MESSAGES_SCHEMA = vol.Schema(
         vol.Optional(ATTR_LIMIT, default=DEFAULT_THREAD_MESSAGES): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=MAX_THREAD_MESSAGES)
         ),
+    }
+)
+
+MARK_THREAD_READ_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required(ATTR_THREAD_ID): cv.string,
     }
 )
 
@@ -409,6 +418,37 @@ async def _async_get_thread_messages(call: ServiceCall) -> ServiceResponse:
     }
 
 
+async def _async_mark_thread_read(call: ServiceCall) -> ServiceResponse:
+    """Handle the mark_thread_read action."""
+    entry = _async_resolve_entry(call.hass, call)
+    thread_id: str = call.data[ATTR_THREAD_ID]
+
+    try:
+        marked = await _async_call_aula(
+            entry, lambda client: client.mark_thread_read(thread_id)
+        )
+    except ValueError as err:
+        # aula refuses, before writing anything, a thread it cannot show to be
+        # in the guardian's own mailbox: common and OTP inboxes need an inbox
+        # ID it does not send.
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="thread_not_in_own_mailbox",
+            translation_placeholders={"thread_id": thread_id},
+        ) from err
+    except ThreadScanLimitError as err:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="action_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
+
+    # Let the unread count catch up now rather than at the next poll.
+    await entry.runtime_data.messages_coordinator.async_request_refresh()
+
+    return {"thread_id": thread_id, "marked": marked}
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register the Aula actions."""
@@ -424,4 +464,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _async_get_thread_messages,
         schema=GET_THREAD_MESSAGES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_THREAD_READ,
+        _async_mark_thread_read,
+        schema=MARK_THREAD_READ_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )

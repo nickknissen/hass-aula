@@ -163,6 +163,9 @@
     },
     "ambiguous_account": {
       "message": "More than one Aula account is configured. Set config_entry_id to choose which one to read."
+    },
+    "thread_not_in_own_mailbox": {
+      "message": "Thread {thread_id} is not in your own mailbox, for example because it is in a shared inbox, so it cannot be marked as read."
     }
   },
   "services": {
@@ -219,6 +222,20 @@
         "config_entry_id": {
           "name": "Account",
           "description": "Which Aula account to read. Only needed when more than one is configured."
+        }
+      }
+    },
+    "mark_thread_read": {
+      "name": "Mark thread as read",
+      "description": "Marks a message thread as read in Aula, as opening it would. Only threads in your own mailbox can be marked. Thread IDs are listed in the \"messages\" attribute of the Latest messages sensor.",
+      "fields": {
+        "thread_id": {
+          "name": "Thread ID",
+          "description": "The thread to mark as read."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Which Aula account the thread belongs to. Only needed when more than one is configured."
         }
       }
     }
