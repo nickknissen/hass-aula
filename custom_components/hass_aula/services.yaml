@@ -83,3 +83,17 @@ get_thread_messages:
       selector:
         config_entry:
           integration: hass_aula
+
+mark_thread_read:
+  fields:
+    thread_id:
+      required: true
+      example: "12345"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      advanced: true
+      selector:
+        config_entry:
+          integration: hass_aula

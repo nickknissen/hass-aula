@@ -44,6 +44,9 @@
     },
     "get_thread_messages": {
       "service": "mdi:message-text-outline"
+    },
+    "mark_thread_read": {
+      "service": "mdi:email-open-outline"
     }
   }
 }

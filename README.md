@@ -150,7 +150,8 @@ Each entry in `messages` carries `thread_id`, `subject`, `sender`, `date`, `unre
 200 characters). `has_attachments` describes that newest message, and is `false`
 when the thread's messages could not be fetched.
 Pass a `thread_id` to [`hass_aula.get_thread_messages`](#hass_aulaget_thread_messages)
-to read the full text.
+to read the full text, or to [`hass_aula.mark_thread_read`](#hass_aulamark_thread_read)
+to mark it as read.
 
 ### Meebook weekplan
 
@@ -227,6 +228,8 @@ preserved rather than being flattened to the top of the week:
 Aula returns a separate row for every adult attached to a lesson. These are
 merged into a single event, so a co-taught lesson appears once, with every
 teacher named in the event description.
+
+A booked parent meeting shows at the time slot you booked for that child. In Aula's own calendar data a meeting spans the whole period parents can book in, often several days. A meeting you have not booked yet still shows that whole period.
 
 ---
 
@@ -312,6 +315,36 @@ sequence:
 ```
 
 Each entry in `messages` carries `id`, `content` (plain text) and `content_markdown`.
+
+### `hass_aula.mark_thread_read`
+
+Marks a message thread as read in Aula, the same way opening it in Aula does. Useful once an automation has passed a message on, for example read it aloud or sent it to your phone. The Latest messages sensor updates straight afterwards.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `thread_id` | yes | Thread to mark. Taken from the `messages` attribute of the Latest messages sensor |
+| `config_entry_id` | no | Which Aula account the thread belongs to. Only needed if you have more than one configured |
+
+Only threads in your own mailbox can be marked. A thread in a shared inbox, such as a class's common inbox, is refused with an error. A message that arrives while the thread is being marked may stay unread.
+
+The action can return a response, `{"thread_id": ..., "marked": ...}`. `marked` is `false` when the thread holds no message that can be marked as read.
+
+```yaml
+sequence:
+  - variables:
+      thread_id: >
+        {{ state_attr('sensor.test_parent_latest_messages', 'messages')[0].thread_id }}
+  - action: hass_aula.get_thread_messages
+    data:
+      thread_id: "{{ thread_id }}"
+    response_variable: thread
+  - action: notify.mobile_app_my_phone
+    data:
+      message: "{{ thread.messages[0].content }}"
+  - action: hass_aula.mark_thread_read
+    data:
+      thread_id: "{{ thread_id }}"
+```
 
 ---
 

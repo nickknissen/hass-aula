@@ -163,6 +163,9 @@
     },
     "ambiguous_account": {
       "message": "Der er konfigureret mere end én Aula-konto. Angiv config_entry_id for at vælge, hvilken der skal læses."
+    },
+    "thread_not_in_own_mailbox": {
+      "message": "Tråd {thread_id} ligger ikke i din egen indbakke, f.eks. fordi den er i en fælles indbakke, og kan derfor ikke markeres som læst."
     }
   },
   "services": {
@@ -219,6 +222,20 @@
         "config_entry_id": {
           "name": "Konto",
           "description": "Hvilken Aula-konto der skal læses. Kun nødvendig når der er konfigureret mere end én."
+        }
+      }
+    },
+    "mark_thread_read": {
+      "name": "Marker tråd som læst",
+      "description": "Markerer en beskedtråd som læst i Aula, ligesom når den åbnes. Kun tråde i din egen indbakke kan markeres. Tråd-id'er findes i attributten \"messages\" på sensoren Seneste beskeder.",
+      "fields": {
+        "thread_id": {
+          "name": "Tråd-id",
+          "description": "Tråden der skal markeres som læst."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Hvilken Aula-konto tråden hører til. Kun nødvendig når der er konfigureret mere end én."
         }
       }
     }

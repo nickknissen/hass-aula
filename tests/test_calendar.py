@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from aula import HttpRequestError
@@ -11,7 +11,61 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.hass_aula.calendar import _convert_event
 
-from .conftest import make_config_entry, mock_calendar_event
+from .conftest import make_config_entry, mock_calendar_event, mock_meeting_booking
+
+
+async def test_calendar_get_events_shows_booked_meeting_slot(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test a range read shows the booked slot, not the booking period."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    mock_aula_client.get_calendar_events = AsyncMock(
+        return_value=[
+            mock_calendar_event(
+                event_id=42,
+                title="Skole-hjem-samtale",
+                start=datetime(2024, 1, 15, 8, 0, tzinfo=UTC),
+                end=datetime(2024, 1, 19, 16, 0, tzinfo=UTC),
+                event_type="school_home_meeting",
+            )
+        ]
+    )
+    mock_aula_client.get_meeting_bookings = AsyncMock(
+        return_value=[mock_meeting_booking(child_id=1)]
+    )
+    start = datetime(2024, 1, 15, tzinfo=UTC)
+    response = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": "calendar.test_child_school_calendar",
+            "start_date_time": start,
+            "end_date_time": start + timedelta(days=7),
+        },
+        blocking=True,
+        return_response=True,
+    )
+
+    events = response["calendar.test_child_school_calendar"]["events"]
+    assert [
+        (
+            e["summary"],
+            datetime.fromisoformat(e["start"]),
+            datetime.fromisoformat(e["end"]),
+        )
+        for e in events
+    ] == [
+        (
+            "Skole-hjem-samtale",
+            datetime(2024, 1, 16, 15, 20, tzinfo=UTC),
+            datetime(2024, 1, 16, 15, 40, tzinfo=UTC),
+        )
+    ]
 
 
 async def test_calendar_entity_created(
