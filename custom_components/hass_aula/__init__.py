@@ -92,33 +92,18 @@ def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
     return widget_id in entry.data.get(CONF_WIDGETS, [])
 
 
-def _mu_task_widget_id(entry: AulaConfigEntry) -> str | None:
+def _first_enabled_widget(
+    entry: AulaConfigEntry, candidates: tuple[str, ...]
+) -> str | None:
     """
-    Return the widget to mint MinUddannelse opgaveliste tokens with.
+    Return the first of ``candidates`` the user selected, or None.
 
-    Not every school lists the opgaver widget (0030); one that has only the
-    SSO widget (0023) still has opgaver, and a 0023 token is accepted by the
-    same endpoint with the same parameters. Prefer 0030 where both are
-    present, since that is the widget the endpoint belongs to.
+    For a feature more than one widget can mint tokens for, such as
+    MinUddannelse opgaver and ugenoter, where a school may list only the SSO
+    widget. ``candidates`` comes from the aula package in preference order,
+    so the widget the endpoint belongs to wins when the user selected both.
     """
-    return next(
-        (w for w in MU_TASK_WIDGETS if is_widget_enabled(entry, w)),
-        None,
-    )
-
-
-def _mu_ugeplan_widget_id(entry: AulaConfigEntry) -> str | None:
-    """
-    Return the widget to mint MinUddannelse ugenoter tokens with.
-
-    As with opgaver, a school that lists only the SSO widget (0023) still has
-    weekly letters, fetched with a 0023 token. Prefer the Ugenoter widget
-    (0029) where both are present.
-    """
-    return next(
-        (w for w in MU_UGEPLAN_WIDGETS if is_widget_enabled(entry, w)),
-        None,
-    )
+    return next((w for w in candidates if is_widget_enabled(entry, w)), None)
 
 
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
@@ -181,13 +166,13 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    mu_task_widget = _mu_task_widget_id(entry)
+    mu_task_widget = _first_enabled_widget(entry, MU_TASK_WIDGETS)
     if mu_task_widget:
         wc.mu_tasks = AulaMUTasksCoordinator(
             hass, client, profile, widget_context, token_manager, mu_task_widget
         )
 
-    mu_ugeplan_widget = _mu_ugeplan_widget_id(entry)
+    mu_ugeplan_widget = _first_enabled_widget(entry, MU_UGEPLAN_WIDGETS)
     if mu_ugeplan_widget:
         wc.mu_ugeplan = AulaMUUgeplanCoordinator(
             hass, client, profile, widget_context, token_manager, mu_ugeplan_widget
