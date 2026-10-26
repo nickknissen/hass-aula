@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from aula import AulaAuthenticationError, AulaConnectionError
+from aula import AulaAuthenticationError, AulaConnectionError, HttpRequestError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -21,6 +21,7 @@ from custom_components.hass_aula.const import (
     WIDGET_MEEBOOK_OVERVIEW,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 
 from .conftest import (
@@ -112,6 +113,22 @@ async def test_setup_entry_connection_error(
     with patch(
         "custom_components.hass_aula.create_client",
         side_effect=AulaConnectionError("Connection failed", 0),
+    ):
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_setup_entry_api_error_envelope(
+    hass: HomeAssistant,
+) -> None:
+    """Test setup retries when Aula answers with an error code in the body."""
+    with patch(
+        "custom_components.hass_aula.create_client",
+        side_effect=HttpRequestError("Aula rejected method (status code 1)", 200),
     ):
         entry = make_config_entry()
         entry.add_to_hass(hass)
@@ -391,6 +408,40 @@ async def test_mu_tasks_prefers_the_opgaver_widget(
     # Order comes from the widget list, not from what the user happened to
     # select first, so the endpoint's own widget leads.
     assert coordinator.widget_id == WIDGET_MIN_UDDANNELSE_TASKS
+
+
+async def test_mu_ugeplan_enabled_by_the_sso_widget_alone(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test a school listing only the SSO widget still gets weekly letters."""
+    entry = make_widget_config_entry(widgets=[WIDGET_MIN_UDDANNELSE_SSO])
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.mu_ugeplan_coordinator
+    assert coordinator is not None
+    assert coordinator.widget_id == WIDGET_MIN_UDDANNELSE_SSO
+
+
+async def test_mu_ugeplan_prefers_the_ugenoter_widget(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Test the Ugenoter widget wins when the account lists both."""
+    entry = make_widget_config_entry(
+        widgets=[WIDGET_MIN_UDDANNELSE_SSO, WIDGET_MIN_UDDANNELSE_UGEPLAN]
+    )
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.mu_ugeplan_coordinator
+    assert coordinator is not None
+    assert coordinator.widget_id == WIDGET_MIN_UDDANNELSE_UGEPLAN
 
 
 async def test_mu_tasks_absent_without_either_widget(

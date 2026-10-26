@@ -10,11 +10,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from aula import (
     AulaAuthenticationError,
-    AulaConnectionError,
-    AulaRateLimitError,
-    AulaServerError,
     CalendarEvent,
     DailyOverview,
+    HttpRequestError,
 )
 from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
@@ -41,7 +39,6 @@ from .const import (
     TRANSIENT_FAILURE_TOLERANCE,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_WEEKPLAN,
-    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from .data import (
     EasyIQChildData,
@@ -85,7 +82,10 @@ async def _aula_api_errors(
             translation_domain=DOMAIN,
             translation_key="auth_failed",
         ) from err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
+        # Besides its connection, server and rate-limit subclasses, aula raises
+        # the base class itself when Aula answers 200 with an error code in the
+        # body (aula 1.13.0).
         msg = f"Error communicating with Aula API: {err}"
         raise UpdateFailed(msg) from err
 
@@ -353,9 +353,8 @@ def _message_preview(
     unread_ids: set[str],
 ) -> MessagePreview:
     """Shape a thread and its newest message into a MessagePreview."""
-    # TODO(aula-package): MessageThread/Message expose neither sender nor  # noqa: TD003, FIX002, E501
-    # timestamp as public fields. Add them to the aula package, then replace
-    # these _raw accesses.
+    # TODO(aula-package): MessageThread does not expose its timestamp as a  # noqa: TD003, FIX002, E501
+    # public field. Add it to the aula package, then replace this _raw access.
     thread_raw = thread._raw or {}  # noqa: SLF001
     sender: str | None = None
     sent_at: str | None = None
@@ -368,9 +367,9 @@ def _message_preview(
         )
     elif messages:
         message = messages[0]
-        message_raw = message._raw or {}  # noqa: SLF001
-        sender = message_raw.get("sender", {}).get("fullName")
-        sent_at = message_raw.get("sendDateTime")
+        sender = message.sender_name
+        if message.send_datetime is not None:
+            sent_at = message.send_datetime.isoformat()
         preview = message.content[:MAX_PREVIEW_CHARS]
         has_attachments = message.has_attachments
 
@@ -612,15 +611,22 @@ class AulaMUUgeplanCoordinator(
 ):
     """Coordinator for fetching Min Uddannelse weekly notes (ugenoter)."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         hass: HomeAssistant,
         client: AulaApiClient,
         profile: Profile,
         widget_context: WidgetContext,
         token_manager: AulaTokenManager,
+        widget_id: str,
     ) -> None:
-        """Initialize the MU ugeplan coordinator."""
+        """
+        Initialize the MU ugeplan coordinator.
+
+        ``widget_id`` is the widget whose token mints access to the ugebrev
+        endpoint, resolved like the MU tasks coordinator's.
+        """
+        self.widget_id = widget_id
         super().__init__(
             hass,
             client,
@@ -634,7 +640,7 @@ class AulaMUUgeplanCoordinator(
     async def _fetch_week(self, week: str) -> dict[int, list[MUWeeklyLetter]]:
         """Fetch MU weekly notes for a single week and distribute to children."""
         persons: list[MUWeeklyPerson] = await self.client.widgets.get_ugeplan(
-            widget_id=WIDGET_MIN_UDDANNELSE_UGEPLAN,
+            widget_id=self.widget_id,
             child_filter=self.widget_context.child_filter,
             institution_filter=self.widget_context.institution_filter,
             week=week,
@@ -751,6 +757,12 @@ class AulaEasyIQCoordinator(
                 # than publish one child's week under another's name.
                 msg = f"EasyIQ returned another child's data: {err}"
                 raise UpdateFailed(msg) from err
+            except RuntimeError as err:
+                # With several children, aula refuses to read EasyIQ when the
+                # portal does not say which child is which, rather than guess
+                # and risk the same mix-up (aula 1.13.0).
+                msg = f"EasyIQ could not tell the children apart: {err}"
+                raise UpdateFailed(msg) from err
 
         return dict(results)
 
@@ -811,7 +823,9 @@ class AulaMeebookCoordinator(
             current = await self._fetch_week(current_week)
             try:
                 next_week_data = await self._fetch_week(next_week)
-            except (AulaConnectionError, AulaServerError, AulaRateLimitError):
+            except AulaAuthenticationError:
+                raise
+            except HttpRequestError:
                 # Optional future data must not hide the current week's tasks.
                 # Authentication errors still reach the outer error translator.
                 LOGGER.warning("Could not fetch next week's Meebook tasks")

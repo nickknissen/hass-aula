@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING
 
 from aula import (
     AulaAuthenticationError,
-    AulaConnectionError,
-    AulaRateLimitError,
-    AulaServerError,
+    HttpRequestError,
     create_client,
 )
 from aula.http_httpx import HttpxHttpClient
@@ -27,6 +25,7 @@ from .const import (
     LOGGER,
     MEEBOOK_PROVIDER_WIDGETS,
     MU_TASK_WIDGETS,
+    MU_UGEPLAN_WIDGETS,
     PLATFORMS,
     WIDGET_BIBLIOTEKET,
     WIDGET_EASYIQ_HOMEWORK,
@@ -93,19 +92,18 @@ def is_widget_enabled(entry: AulaConfigEntry, widget_id: str) -> bool:
     return widget_id in entry.data.get(CONF_WIDGETS, [])
 
 
-def _mu_task_widget_id(entry: AulaConfigEntry) -> str | None:
+def _first_enabled_widget(
+    entry: AulaConfigEntry, candidates: tuple[str, ...]
+) -> str | None:
     """
-    Return the widget to mint MinUddannelse opgaveliste tokens with.
+    Return the first of ``candidates`` the user selected, or None.
 
-    Not every school lists the opgaver widget (0030); one that has only the
-    SSO widget (0023) still has opgaver, and a 0023 token is accepted by the
-    same endpoint with the same parameters. Prefer 0030 where both are
-    present, since that is the widget the endpoint belongs to.
+    For a feature more than one widget can mint tokens for, such as
+    MinUddannelse opgaver and ugenoter, where a school may list only the SSO
+    widget. ``candidates`` comes from the aula package in preference order,
+    so the widget the endpoint belongs to wins when the user selected both.
     """
-    return next(
-        (w for w in MU_TASK_WIDGETS if is_widget_enabled(entry, w)),
-        None,
-    )
+    return next((w for w in candidates if is_widget_enabled(entry, w)), None)
 
 
 def _create_http_client(cookies: dict[str, str]) -> HttpxHttpClient:
@@ -147,12 +145,7 @@ async def _try_build_widget_context(
 
     try:
         return await _build_widget_context(client, profile)
-    except (
-        AulaAuthenticationError,
-        AulaConnectionError,
-        AulaServerError,
-        AulaRateLimitError,
-    ) as err:
+    except HttpRequestError as err:
         LOGGER.warning("Failed to build widget context, skipping widgets: %s", err)
         return None
 
@@ -173,15 +166,16 @@ def _create_widget_coordinators(  # noqa: PLR0913
             hass, client, profile, widget_context, token_manager
         )
 
-    mu_task_widget = _mu_task_widget_id(entry)
+    mu_task_widget = _first_enabled_widget(entry, MU_TASK_WIDGETS)
     if mu_task_widget:
         wc.mu_tasks = AulaMUTasksCoordinator(
             hass, client, profile, widget_context, token_manager, mu_task_widget
         )
 
-    if is_widget_enabled(entry, WIDGET_MIN_UDDANNELSE_UGEPLAN):
+    mu_ugeplan_widget = _first_enabled_widget(entry, MU_UGEPLAN_WIDGETS)
+    if mu_ugeplan_widget:
         wc.mu_ugeplan = AulaMUUgeplanCoordinator(
-            hass, client, profile, widget_context, token_manager
+            hass, client, profile, widget_context, token_manager, mu_ugeplan_widget
         )
 
     if is_widget_enabled(entry, WIDGET_EASYIQ_WEEKPLAN) or is_widget_enabled(
@@ -265,7 +259,7 @@ async def async_setup_entry(
                 translation_domain=DOMAIN,
                 translation_key="auth_failed",
             ) from refresh_err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
         await http_client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
@@ -284,13 +278,13 @@ async def async_setup_entry(
                 translation_domain=DOMAIN,
                 translation_key="auth_failed",
             ) from refresh_err
-        except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+        except HttpRequestError as err:
             await client.close()
             raise ConfigEntryNotReady(
                 translation_domain=DOMAIN,
                 translation_key="connection_failed",
             ) from err
-    except (AulaConnectionError, AulaServerError, AulaRateLimitError) as err:
+    except HttpRequestError as err:
         await client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,

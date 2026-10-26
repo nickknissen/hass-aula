@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.10.0`
+> **Package:** `aula==1.13.1`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-09-07
+> **Last updated:** 2026-10-23
 
 ---
 
@@ -107,15 +107,32 @@ reports that up front via `PresenceConfiguration.can_edit(PresenceModule.REPORT_
 | `get_threads_in_bundle` | `async get_threads_in_bundle(bundle_id: int) -> list[MessageThread]` | Fetch threads in a bundle |
 | `get_message_info` | `async get_message_info(thread_id: str, message_id: str) -> dict \| None` | Fetch lightweight message info |
 | `get_auto_reply` | `async get_auto_reply() -> AutoReply \| None` | Fetch current auto-reply configuration |
-| `search_messages` | `async search_messages(institution_profile_ids: list[int], institution_codes: list[str], *, text: str = "", from_date: date \| None = None, to_date: date \| None = None, has_attachments: bool \| None = None, limit: int = 100) -> list[Message]` | Search messages with server-side filtering and automatic pagination |
-| `get_all_message_threads` | `async get_all_message_threads(cutoff_date: date) -> list[dict]` | Paginate threads until older than cutoff_date |
-| `get_all_messages_for_thread` | `async get_all_messages_for_thread(thread_id: str) -> list[dict]` | Paginate all messages for a thread |
+| `mark_thread_read` | `async mark_thread_read(thread_id: str) -> bool` | Move the thread's read marker to its newest message, then confirm it with Aula; `False` if the thread holds no markable message |
+| `search_messages` | `async search_messages(institution_profile_ids: list[int], institution_codes: list[str], *, text: str = "", from_date: date \| None = None, to_date: date \| None = None, has_attachments: bool \| None = None, limit: int = 100) -> list[Message]` | Search messages with server-side filtering and automatic pagination; logs a warning when the read is incomplete |
+| `search_messages_result` | same parameters as `search_messages` `-> PaginationResult[Message]` | Search with completeness metadata; hits repeated across pages are kept once |
+| `get_all_message_threads` | `async get_all_message_threads(cutoff_date: date) -> list[dict]` | Paginate threads until older than cutoff_date; warns when incomplete |
+| `get_all_message_threads_result` | `async get_all_message_threads_result(cutoff_date: date) -> PaginationResult[dict]` | As above, with completeness metadata |
+| `get_all_messages_for_thread` | `async get_all_messages_for_thread(thread_id: str) -> list[dict]` | Paginate all messages for a thread; warns when incomplete |
+| `get_all_messages_for_thread_result` | `async get_all_messages_for_thread_result(thread_id: str) -> PaginationResult[dict]` | As above, with completeness metadata |
+
+**`mark_thread_read` (1.12.0)** only handles threads in the guardian's own
+mailbox: a thread whose mailbox is not shown to be theirs (common or OTP inbox)
+raises `ValueError` before anything is written. Aula rejecting the call, or not
+confirming the new marker, raises `HttpRequestError`. A thread that opens with
+non-message events (recipients added or removed) is paged through, 20 at a time,
+up to `_MAX_THREAD_PAGES` (50); past that it raises `ThreadScanLimitError`
+(`aula.api_client`). A message arriving while the thread is marked may stay
+unread.
+
+`search_messages` profile IDs must be children only — including a parent can
+make Aula reject the request.
 
 ### Calendar
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `get_calendar_events` | `async get_calendar_events(institution_profile_ids: list[int], start: datetime, end: datetime) -> list[CalendarEvent]` | Fetch calendar events for given profiles and date range |
+| `get_calendar_events` | `async get_calendar_events(institution_profile_ids: list[int], start: datetime, end: datetime) -> list[CalendarEvent]` | Fetch events for inclusive whole days (time parts ignored); `ValueError` if start date is after end date (1.13.0). Co-taught lesson rows are merged |
+| `get_meeting_bookings` | `async get_meeting_bookings(child_id: int, start: datetime, end: datetime) -> list[MeetingBooking]` | A child's booked parent meetings overlapping `[start, end)`, with the booked slot's real times (1.13.0) |
 | `get_calendar_event` | `async get_calendar_event(event_id: int, occurrence_datetime: str \| None = None) -> dict \| None` | Fetch a single calendar event by ID |
 | `get_important_dates` | `async get_important_dates(limit: int = 10, include_today: bool = True) -> list[dict]` | Fetch upcoming important dates |
 | `get_birthday_events` | `async get_birthday_events(institution_codes: list[str], start: str, end: str) -> list[dict]` | Fetch birthday events for institutions |
@@ -224,7 +241,7 @@ AulaWidgetsClient(api_client: _WidgetRequestClient) -> None
 | `get_easyiq_calendar_events` | `async get_easyiq_calendar_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_WEEKPLAN, all_institution_filter: list[str] \| None = None) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ weekly-plan rows |
 | `get_easyiq_homework_events` | `async get_easyiq_homework_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_HOMEWORK, all_institution_filter: list[str] \| None = None) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ homework rows |
 | `ensure_easyiq_session` | `async ensure_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str]) -> None` | Bootstrap the EasyIQ portal session and learn its child IDs (best-effort, idempotent, safe to await concurrently) |
-| `authenticate_easyiq_session` | `async authenticate_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "", token: str \| None = None) -> dict[str, Any]` | `POST /Aula/AuthenticateAulaUser`, returning its body key-folded to lowercase |
+| `authenticate_easyiq_session` | `async authenticate_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "", token: str \| None = None, widget_id: str = WIDGET_EASYIQ_HOMEWORK) -> dict[str, Any]` | `POST /Aula/AuthenticateAulaUser`, returning its body key-folded to lowercase |
 | `switch_easyiq_child` | `async switch_easyiq_child(child_easyiq_id: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "", token: str \| None = None) -> None` | `POST /Aula/SwitchChild`, the portal's own child-selection call. Takes EasyIQ's `Id`, not a UniLogin |
 | `confirm_easyiq_session_child` | `async confirm_easyiq_session_child(expected_child_login: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str, token: str \| None = None) -> str` | Check the session really is on the child asked for. Raises `EasyIQWrongChildSession` |
 | `resolve_easyiq_child_id` | `resolve_easyiq_child_id(child_user_id: str) -> str \| None` | EasyIQ's own ID for a child, once the session has been made |
@@ -286,6 +303,12 @@ A child missing from a known `GetChildren` list is not read at all: it raises
 `EasyIQChildNotInPortal`, which means their institution is not on EasyIQ (a
 daycare, typically) and so they have no week plan. Callers should treat it as an
 absence for that child, not as a failed update for all of them.
+
+When the `GetChildren` bootstrap failed, so no children are known, only a
+single-child account falls back to guessing identifiers. With more than one
+child in `all_child_user_ids`, the read raises a plain `RuntimeError`
+("EasyIQ's portal did not identify the children; …") rather than risk returning
+another child's rows (1.13.0).
 
 ---
 
@@ -419,6 +442,50 @@ class CalendarEvent(AulaDataClass):
     substitute_name: str | None
     location: str | None
     belongs_to: int | None
+    teacher_names: list[str] = field(default_factory=list)      # 1.11.0
+    substitute_names: list[str] = field(default_factory=list)   # 1.11.0
+```
+
+Aula returns one `lesson` row per adult on a lesson. `get_calendar_events()`
+folds rows with the same title, timeslot, location and child into one event via
+`merge_duplicate_lessons(events)` (exported from `aula.models`), collecting every
+adult into `teacher_names` / `substitute_names`. `teacher_name` /
+`substitute_name` still name the first.
+
+### MeetingBooking
+
+Returned by `get_meeting_bookings()` (1.13.0). A parent meeting's calendar row
+spans the whole booking period; this is the slot actually booked for the child.
+Unbooked invitations and other children's answers are left out.
+
+```python
+@dataclass
+class MeetingBooking(AulaDataClass):
+    meeting_id: int
+    child_id: int              # institution profile ID (Child.id)
+    title: str                 # "Samtale" when the row has none
+    meeting_type: str          # "school_home_meeting" or "parental_meeting"
+    start_datetime: datetime   # always offset-aware
+    end_datetime: datetime
+    location: str | None = None
+```
+
+`get_meeting_bookings()` needs timezone-aware bounds with `end > start`
+(`ValueError` otherwise), reads in chunks of at most 49 days, and raises
+`HttpRequestError` rather than returning a partial list when a chunk fails.
+
+### PaginationResult
+
+**Module:** `aula.models.pagination` (1.13.0)
+
+```python
+TerminationReason = Literal["exhausted", "cutoff", "max_pages", "no_progress", "inconsistent_total"]
+
+@dataclass
+class PaginationResult[T]:
+    items: list[T]            # first-seen order, duplicates dropped
+    complete: bool            # True only for "exhausted" or "cutoff"
+    termination_reason: TerminationReason
 ```
 
 ### Message
@@ -429,6 +496,8 @@ class Message(AulaDataClass):
     id: str
     content_html: str
     attachments: list[Attachment] = field(default_factory=list)
+    sender_name: str | None = field(default=None, kw_only=True)                 # 1.12.0
+    send_datetime: datetime | None = field(default=None, kw_only=True)          # 1.12.0
     # Properties:
     # content: str           — plain text stripped from HTML
     # content_markdown: str  — HTML converted to Markdown
@@ -441,6 +510,12 @@ class Message(AulaDataClass):
 string on older messages. Both `messaging.getMessagesForThread` and
 `search.findMessage` parse through it, so a search filtered on attachments
 returns them. **`attachments` is new in 1.9.0.**
+
+`sender_name` comes from `sender.fullName` and `send_datetime` from
+`sendDateTime` (parsed with `parse_api_datetime`, so `None` when unreadable).
+`from_search_hit(hit)` builds a `Message` from a `search.findMessage` hit,
+taking the sender from a `"Name: "` prefix on the body when the hit has no
+sender field.
 
 ### MessageThread
 
@@ -732,9 +807,13 @@ class Appointment(AulaDataClass):
     description: str = ""
     activities: str = ""      # EasyIQ ActivitiesDisplay: class or team, e.g. "6A"
     item_type: int | None = None
+    owner_name: str = field(default="", kw_only=True)
+    is_all_day: bool = field(default=False, kw_only=True)
+    is_notice: bool = field(default=False, kw_only=True)
 ```
 
 `activities` is empty for sources that do not carry a class or team.
+`is_all_day` and `is_notice` accept only `true`/`1`/`yes` (any case) as true.
 
 ### EasyIQHomework
 
@@ -770,10 +849,18 @@ class EasyIQCalendarEvent(AulaDataClass):
     courses: str = ""
     activities: str = ""
     description: str = ""
+    owner_name: str = field(default="", kw_only=True)    # OwnerName or Teacher
+    is_all_day: bool = field(default=False, kw_only=True)
+    is_notice: bool = field(default=False, kw_only=True)  # row has no course
+    event_title: str = field(default="", kw_only=True)   # explicit Title/Name
 
     @property
-    def title(self) -> str:   # courses or activities; empty when neither
+    def title(self) -> str:   # event_title, courses, activities, or the
+                              # description's first heading/line; else empty
 ```
+
+A row without a course is a notice, and notices are always all-day.
+`StartDate`/`EndDate` are accepted as start/end keys alongside the ISO ones.
 
 `from_dict` matches keys **case-insensitively**: the calendar controller answers
 in camelCase (`itemType`) and the homework controller in PascalCase (`ItemType`).
@@ -1165,6 +1252,11 @@ HttpRequestError                 — Base; any non-2xx response
 
 All store `status_code: int` as an attribute.
 
+**Error envelopes (1.13.0):** when an Aula API response is 2xx but its body
+carries a non-zero `status.code` (and no sub-code mapped to an auth error), the
+client raises the base `HttpRequestError` itself — not a subclass — instead of
+returning an empty result. Catch `HttpRequestError` to cover it.
+
 ### Auth Exceptions (`aula.auth.exceptions`)
 
 ```
@@ -1231,11 +1323,17 @@ EASYIQ_SWITCHCHILD_PATH = "/Aula/SwitchChild"   # 1.8.0; takes EasyIQ's own Id
 ### Widget IDs
 
 `WIDGET_EASYIQ = "0001"`, the combined EasyIQ ID, was **removed in 1.6.0** —
-Aula lists the weekly plan and homework as separate widgets.
+Aula lists the weekly plan and homework as separate widgets. The ID is back as
+`WIDGET_EASYIQ_LEGACY` (1.13.0), listed in `EASYIQ_WEEKPLAN_WIDGETS` as a
+weekly-plan token fallback; only the CLI picks from that tuple.
 
 ```python
 WIDGET_EASYIQ_WEEKPLAN = "0128"
+WIDGET_EASYIQ_LEGACY = "0001"
 WIDGET_EASYIQ_HOMEWORK = "0142"
+
+# EasyIQ weekplan-capable widgets, in preference order.
+EASYIQ_WEEKPLAN_WIDGETS = (WIDGET_EASYIQ_WEEKPLAN, WIDGET_EASYIQ_LEGACY, WIDGET_EASYIQ_HOMEWORK)
 WIDGET_BIBLIOTEKET = "0019"
 WIDGET_MIN_UDDANNELSE_UGEPLAN = "0029"
 WIDGET_MIN_UDDANNELSE_TASKS = "0030"
@@ -1245,6 +1343,10 @@ WIDGET_MIN_UDDANNELSE_SSO = "0023"
 # order. Not every school lists 0030, and one that has only the SSO widget still
 # has opgaver — a 0023 token is accepted by the same endpoint, same parameters.
 MIN_UDDANNELSE_TASK_WIDGETS = (WIDGET_MIN_UDDANNELSE_TASKS, WIDGET_MIN_UDDANNELSE_SSO)
+
+# Likewise for weekly letters (/ugebrev): the SSO widget mints a working token
+# at schools without the Ugenoter widget (1.13.0).
+MIN_UDDANNELSE_UGEPLAN_WIDGETS = (WIDGET_MIN_UDDANNELSE_UGEPLAN, WIDGET_MIN_UDDANNELSE_SSO)
 WIDGET_MEEBOOK = "0004"
 WIDGET_HUSKELISTEN = "0062"
 ```
@@ -1394,10 +1496,12 @@ Callbacks:
 async def create_client(
     token_data: dict[str, Any],
     http_client: HttpClient | None = None,
+    *,
+    token_storage: TokenStorage | None = None,
 ) -> AulaApiClient
 ```
 
-Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally. When a `refresh_token` is present in `token_data`, builds an `on_token_refresh` callback using `_refresh_token_via_oidc()` for automatic 401 retry.
+Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally. When a `refresh_token` is present in `token_data`, builds an `on_token_refresh` callback using `_refresh_token_via_oidc()` for automatic 401 retry. With `token_storage`, that automatic refresh merges the rotated credentials into `token_data` and saves the whole blob before retrying; without it, rotated tokens live only in memory.
 
 #### authenticate_and_create_client()
 
@@ -1438,6 +1542,9 @@ class MitIDAuthClient:
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         """Refresh using stored refresh_token. Returns updated token dict."""
 ```
+
+`refresh_access_token` keeps the old `refresh_token` in the returned dict when
+the token endpoint does not rotate it (1.13.0).
 
 **Properties:** `access_token`, `refresh_token`, `tokens`, `is_authenticated`, `cookies`, `mitid_client`
 
@@ -1651,7 +1758,10 @@ from aula.models import (
     PresenceRegistration, PresenceRegistrationDetail,
     ChildPresenceState, PresenceConfiguration,
     PresenceWeekOverview, PresenceDay, PresenceActivity,
+    MeetingBooking, merge_duplicate_lessons,
 )
+from aula.models.pagination import PaginationResult
+from aula.api_client import ThreadScanLimitError
 ```
 
 New exception subclasses (importable from `aula.http`):
