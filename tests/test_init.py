@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from aula import AulaAuthenticationError, AulaConnectionError, HttpRequestError
+from aula import (
+    AulaAuthenticationError,
+    AulaConnectionError,
+    AulaServerError,
+    HttpRequestError,
+)
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -144,6 +149,22 @@ async def test_setup_entry_connection_error(
     with patch(
         "custom_components.hass_aula.create_client",
         side_effect=AulaConnectionError("Connection failed", 0),
+    ):
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_setup_entry_token_server_outage_retries(
+    hass: HomeAssistant,
+) -> None:
+    """A token server outage during aula's own refresh retries setup, not reauth."""
+    with patch(
+        "custom_components.hass_aula.create_client",
+        side_effect=AulaServerError("Token server unavailable: HTTP 503", 503),
     ):
         entry = make_config_entry()
         entry.add_to_hass(hass)

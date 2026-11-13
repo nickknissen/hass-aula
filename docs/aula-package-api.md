@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.18.0`
+> **Package:** `aula==1.20.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-11-11
+> **Last updated:** 2026-11-13
 
 ---
 
@@ -38,6 +38,11 @@ AulaApiClient(
 ) -> None
 ```
 
+`on_token_refresh` returns the new access token, or `None` when the refresh token was
+rejected; the request then fails with its original 401. Since 1.20.0 an `AulaServerError` or
+`AulaConnectionError` raised by the callback reaches the caller of the request, so a down
+token server is not reported as a rejected login.
+
 ### Session Management
 
 | Method | Signature | Description |
@@ -62,6 +67,7 @@ Supports `async with` context manager.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `get_widgets` | `async get_widgets() -> list[WidgetConfiguration]` | Return widget configurations available for the current user |
+| `get_widget_token` | `async get_widget_token(widget_id: str) -> str` | Mint a widget token from the Aula session. Returns the raw JWT with no `Bearer ` prefix (1.20.0) |
 
 ### Daily Overview & Presence
 
@@ -78,6 +84,15 @@ Supports `async with` context manager.
 | `get_activity_overview` | `async get_activity_overview(institution_profile_ids: list[int], week: int, year: int) -> PresenceWeekOverview \| None` | Fetch activity/week overview for presence (employee-only) |
 | `get_vacation_registrations` | `async get_vacation_registrations(child_ids: list[int]) -> list[VacationRegistration]` | Fetch vacation registrations for the given children (`Child.id`; a guardian's own or a child's user profile ID is rejected) |
 | `update_presence_status` | `async update_presence_status(institution_profile_ids: list[int], status: PresenceState \| int) -> bool` | Set today's presence status, e.g. report a child sick; returns True if Aula accepted |
+| `add_vacation` | `async add_vacation(child_ids: list[int], start_date: date, end_date: date, comment: str = "") -> bool` | Register a planned absence ("ferie/fri") for children (`Child.id`); returns True once Aula accepted it (1.19.0) |
+
+`add_vacation` checks the portal's rules before sending and raises `ValueError` when they fail:
+at least one child, start today or later in Danish time, end on or after start and at most a
+calendar year later, comment at most 250 characters. It does not check whether the child may
+get one. The portal offers it only when
+`PresenceConfiguration.can_edit(PresenceModule.VACATION)` holds and
+`Child.has_custody_or_extended_access` is not `False`. It has not been checked against a live
+account: the success reply, overlapping absences and whether the end date counts are unknown.
 
 `update_presence_status` is the endpoint behind the portal's sick button —
 reporting a child ill and taking the report back are the same call with a
@@ -218,6 +233,7 @@ These delegate to `self.widgets.*` and will be removed in a future version:
 |-----------|------|-------|
 | `api_url` | `str` | Base API URL with version (e.g. `https://www.aula.dk/api/v25`) |
 | `widgets` | `AulaWidgetsClient` | Widget-specific API client |
+| `http_client` | `HttpClient` | Read-only. The `HttpClient` the client sends through; widget providers share it (1.20.0) |
 
 ---
 
@@ -241,19 +257,28 @@ AulaWidgetsClient(api_client: _WidgetRequestClient) -> None
 | `get_easyiq_homework` | `async get_easyiq_homework(week: str, session_uuid: str, institution_filter: list[str], child_id: str, *, child_profile_id: str, all_child_user_ids: list[str] \| None = None, all_institution_filter: list[str] \| None = None) -> list[EasyIQHomework]` | Fetch EasyIQ homework assignments from the school portal. Raises `EasyIQChildNotInPortal` |
 | `get_easyiq_calendar_events` | `async get_easyiq_calendar_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_WEEKPLAN, all_institution_filter: list[str] \| None = None) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ weekly-plan rows |
 | `get_easyiq_homework_events` | `async get_easyiq_homework_events(*, week: str, institution_filter: list[str], child_profile_id: str, child_user_id: str, all_child_user_ids: list[str], guardian_login: str, widget_id: str = WIDGET_EASYIQ_HOMEWORK, all_institution_filter: list[str] \| None = None) -> list[EasyIQCalendarEvent]` | Read one week of raw EasyIQ homework rows |
-| `ensure_easyiq_session` | `async ensure_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str]) -> None` | Bootstrap the EasyIQ portal session and learn its child IDs (best-effort, idempotent, safe to await concurrently) |
-| `authenticate_easyiq_session` | `async authenticate_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "", token: str \| None = None, widget_id: str = WIDGET_EASYIQ_HOMEWORK) -> dict[str, Any]` | `POST /Aula/AuthenticateAulaUser`, returning its body key-folded to lowercase |
-| `switch_easyiq_child` | `async switch_easyiq_child(child_easyiq_id: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "", token: str \| None = None) -> None` | `POST /Aula/SwitchChild`, the portal's own child-selection call. Takes EasyIQ's `Id`, not a UniLogin |
-| `confirm_easyiq_session_child` | `async confirm_easyiq_session_child(expected_child_login: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str, token: str \| None = None) -> str` | Check the session really is on the child asked for. Raises `EasyIQWrongChildSession` |
+| `ensure_easyiq_session` | `async ensure_easyiq_session(institution_filter: list[str], guardian_login: str, child_user_ids: list[str], widget_id: str) -> None` | Bootstrap the EasyIQ portal session and learn its child IDs (best-effort, idempotent, safe to await concurrently) |
+| `authenticate_easyiq_session` | `async authenticate_easyiq_session(context: _EasyIQContext) -> dict[str, Any]` | `POST /Aula/AuthenticateAulaUser`, returning its body key-folded to lowercase (one `context` argument since 1.19.0) |
+| `switch_easyiq_child` | `async switch_easyiq_child(child_easyiq_id: str, context: _EasyIQContext) -> None` | `POST /Aula/SwitchChild`, the portal's own child-selection call. Takes EasyIQ's `Id`, not a UniLogin |
+| `confirm_easyiq_session_child` | `async confirm_easyiq_session_child(expected_child_login: str, context: _EasyIQContext) -> str` | Check the session really is on the child asked for. Raises `EasyIQWrongChildSession` |
 | `resolve_easyiq_child_id` | `resolve_easyiq_child_id(child_user_id: str) -> str \| None` | EasyIQ's own ID for a child, once the session has been made |
 | `resolve_easyiq_child_login` | `resolve_easyiq_child_login(child_user_id: str) -> str \| None` | EasyIQ's own `Login` string for a child, once resolved |
-| `easyiq_headers` | `easyiq_headers(token: str, institution_filter: list[str], guardian_login: str, child_user_ids: list[str], child_user_id: str = "") -> dict[str, str]` | Headers the EasyIQ portal expects from its embedded widgets |
+| `easyiq_headers` | `easyiq_headers(context: _EasyIQContext) -> dict[str, str]` | Headers the EasyIQ portal expects from its embedded widgets |
 | `easyiq_identifier_variants` | `easyiq_identifier_variants(child_profile_id: str, child_user_id: str, guardian_login: str, easyiq_child_id: str \| None = None) -> list[tuple[str, str]]` | `(loginId, child header)` pairs to try, best guess first |
 | `get_meebook_weekplan` | `async get_meebook_weekplan(child_filter: list[str], institution_filter: list[str], week: str, session_uuid: str) -> list[MeebookStudentPlan]` | Fetch Meebook weekly plan |
 | `get_docendo_weekplan` | `async get_docendo_weekplan(week: str) -> list[DocendoWeekPlan]` | Fetch Docendo weekly plans (widget `0057`, 1.14.0), one per class for all children. See [Docendo weekplans](#docendo-weekplans) |
 | `get_momo_courses` | `async get_momo_courses(children: list[str], institutions: list[str], session_uuid: str) -> list[MomoUserCourses]` | Fetch MoMo courses (widget v1.3) |
 | `get_momo_reminders` | `async get_momo_reminders(children: list[str], institutions: list[str], session_uuid: str, from_date: str, due_no_later_than: str) -> list[UserReminders]` | Fetch MoMo reminders (widget v1.10) |
 | `get_library_status` | `async get_library_status(widget_id: str, children: list[str], institutions: list[str], session_uuid: str) -> LibraryStatus` | Fetch library status from Cicero (widget v1.6) |
+
+`_EasyIQContext` (1.19.0) is a private frozen dataclass: `token` (the raw widget token),
+`institution_filter`, `guardian_login`, `child_user_ids`, `widget_id` and `child_user_id`.
+The client builds one per call, so concurrent reads for different children never share a
+current child. The readers above keep their signatures; only these four helpers changed.
+
+Since 1.20.0 every provider call goes through a provider transport that sends once and never
+refreshes the Aula session. A provider's 401 or 403 raises `ProviderAuthenticationError`
+(with `widget_id`), not `AulaAuthenticationError`. See [Widget Token Flow](#widget-token-flow).
 
 ### EasyIQ and the school portal
 
@@ -344,7 +369,13 @@ class Child(AulaDataClass):
     profile_picture: str
     user_id: str | None = None           # UniLogin (1.17.0)
     institution_code: str | None = None  # 1.17.0
+
+    @property
+    def has_custody_or_extended_access(self) -> bool | None: ...  # 1.19.0
 ```
+
+`has_custody_or_extended_access` reads `hasCustodyOrExtendedAccess` from `_raw`. `None` means
+Aula did not say, which is not the same as `False`.
 
 ### ProfileMasterData
 
@@ -1305,10 +1336,24 @@ HttpRequestError                 — Base; any non-2xx response
 ├── AulaRateLimitError           — 429
 ├── AulaServerError              — 5xx
 ├── AulaNotFoundError            — 404
+├── ProviderAuthenticationError  — Widget provider 401/403, has widget_id (1.20.0)
 └── AulaConnectionError          — Network errors (status_code=0)
 ```
 
 All store `status_code: int` as an attribute.
+
+**Network failures (1.19.0):** `HttpxHttpClient` raises `AulaConnectionError` for any httpx
+transport error (DNS, refused connection, timeout), with the httpx error as `__cause__`. Before
+1.19.0 these reached the caller as raw httpx exceptions.
+
+**Provider refusals (1.20.0):** a widget provider's 401 or 403 raises
+`ProviderAuthenticationError`. It is not an `AulaAuthenticationError`: the Aula session is
+fine, so treat the widget as unavailable instead of rebuilding the session or asking for
+reauth. A provider's 410 raises `HttpRequestError` and no longer bumps the Aula API version.
+
+**Token server outages (1.20.0):** when the automatic refresh behind a 401 finds the token
+server down, the request raises `AulaServerError` (5xx) or `AulaConnectionError` (unreachable).
+Before 1.20.0 the refresh quietly failed and the request raised `AulaAuthenticationError`.
 
 **Error envelopes (1.13.0):** when an Aula API response is 2xx but its body
 carries a non-zero `status.code` (and no sub-code mapped to an auth error), the
@@ -1331,6 +1376,10 @@ MitIDAuthError                   — Base for MitID auth failures
 │   └── SecurityCheckError       — STIL's bot-defence gate blocked the login
 └── OAuthError                   — OAuth flow failures
 ```
+
+`MitIDAuthClient.refresh_access_token` raises `OAuthError` when the token server rejects the
+refresh token, and `NetworkError` when it is unreachable or, since 1.20.0, answers with a 5xx.
+Before 1.20.0 a 5xx was an `OAuthError`.
 
 `SecurityCheckError` is **new in 1.10.0**: the login was diverted to
 `security-check.stil.dk`, which needs JavaScript and so cannot be answered by
@@ -1512,6 +1561,8 @@ class HttpxHttpClient:
 - Timeout: 30s connect, 60s read (120s read for downloads)
 - Sets `User-Agent` from `const.USER_AGENT`
 - If `httpx_client` is provided, caller retains ownership and must close it
+- `request()` and `download_bytes()` raise `AulaConnectionError` on httpx transport errors.
+  The message names only the host, because the query string can carry credentials (1.19.0)
 
 ---
 
@@ -1554,6 +1605,10 @@ Callbacks:
 | `on_identity_selected(names)` | Async; must return the index of the identity to log in as |
 | `on_login_required()` | Cached tokens are unusable and a fresh login is starting |
 
+Since 1.20.0 an exception raised by one of these callbacks reaches the caller unchanged. Before,
+`MitIDAuthClient.authenticate()` wrapped it in `MitIDAuthError`, so `authenticate()` raised
+`RuntimeError("MitID authentication failed: ...")`. MitID's own errors are wrapped as before.
+
 #### create_client()
 
 ```python
@@ -1565,7 +1620,7 @@ async def create_client(
 ) -> AulaApiClient
 ```
 
-Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally. When a `refresh_token` is present in `token_data`, builds an `on_token_refresh` callback using `_refresh_token_via_oidc()` for automatic 401 retry. With `token_storage`, that automatic refresh merges the rotated credentials into `token_data` and saves the whole blob before retrying; without it, rotated tokens live only in memory.
+Creates a ready-to-use `AulaApiClient` from stored credentials. Calls `init()` internally. When a `refresh_token` is present in `token_data`, builds an `on_token_refresh` callback using `_refresh_token_via_oidc()` for automatic 401 retry. With `token_storage`, that automatic refresh merges the rotated credentials into `token_data` and saves the whole blob before retrying; without it, rotated tokens live only in memory. Since 1.20.0, when the token server is down during that refresh, the request raises `AulaServerError` or `AulaConnectionError` and nothing is saved.
 
 #### authenticate_and_create_client()
 
@@ -1578,9 +1633,10 @@ async def authenticate_and_create_client(
 ```
 
 Convenience wrapper combining `authenticate()` + `create_client()`. Not in the
-top-level `__all__` — import it from `aula.auth_flow`. Unlike `authenticate()`
-it takes no `force_login`; it sets it itself when retrying after an
-`AulaAuthenticationError`.
+top-level `__all__`, so import it from `aula.auth_flow`. When `create_client()`
+raises `AulaAuthenticationError`, it retries once with `force_login=True`. Since
+1.20.0 it also takes `force_login: bool = False` to log in through MitID even when
+the cached session still works.
 
 ### MitIDAuthClient
 
@@ -1608,7 +1664,17 @@ class MitIDAuthClient:
 ```
 
 `refresh_access_token` keeps the old `refresh_token` in the returned dict when
-the token endpoint does not rotate it (1.13.0).
+the token endpoint does not rotate it (1.13.0). It raises `OAuthError` when the
+refresh token is rejected and `NetworkError` when the token server is unreachable
+or answers with a 5xx (the 5xx case since 1.20.0). A redirect is still an
+`OAuthError`.
+
+### TerminalQRDisplay
+
+**New in 1.19.0**, exported from `aula`. Shows the two MitID QR halves in turns in
+one spot of a terminal. Pass `show` as `on_qr_codes` and `done` as `on_qr_done`,
+and call `stop()` when the login ends. Terminal only, so not useful in Home
+Assistant.
 
 **Properties:** `access_token`, `refresh_token`, `tokens`, `is_authenticated`, `cookies`, `mitid_client`
 
@@ -1704,9 +1770,16 @@ Persisted data format:
 ### Widget Token Flow
 
 1. Call `get_widgets()` to discover available widgets and their IDs
-2. Internally, `_get_bearer_token(widget_id)` fetches a per-widget bearer token
-3. Widget requests use this bearer token in the `Authorization` header
+2. `get_widget_token(widget_id)` mints a per-widget token from the Aula session
+   (public since 1.20.0; before, the private `_get_bearer_token`)
+3. Each provider puts the token in its own header: `Authorization: Bearer`, Docendo's
+   misspelled `Baerer`, or Huskelisten's `Aula-Authorization`
 4. Each widget provider has its own API base URL (see Constants)
+
+Since 1.20.0 provider requests skip the Aula request pipeline. They are sent once, with no
+401 refresh, no sub-code check and no API version bump. A 401 or 403 raises
+`ProviderAuthenticationError`, other errors raise as usual. Meebook is the one exception: when
+its body says the JWT expired, it refreshes the Aula session once and retries.
 
 ### Widget Method Parameters
 
@@ -1777,6 +1850,9 @@ def parse_api_datetime(value: Any) -> datetime | None
 Anything falsy, non-`str`, or unparsable yields `None` rather than raising, so
 raw dict values can go straight in.
 
+`aula.utils.dates.aula_today()` (1.19.0) returns today's date in Denmark, the date
+Aula counts its date-only fields in.
+
 ### CLI JSON Output
 
 All CLI commands support `--output json` (or `AULA_OUTPUT=json` env var) to emit machine-readable JSON instead of human-readable text. When active, each command serializes its result via `to_json()` (handles `datetime`, `enum`, and `AulaDataClass` instances) and prints a single JSON document to stdout.
@@ -1804,7 +1880,8 @@ def output_json(ctx: click.Context, data: Any) -> bool:
 ### API Version Handling
 
 - Current default: `API_VERSION = "25"`
-- `_request_with_version_retry()` automatically bumps the version on 410 Gone
+- `_request_with_version_retry()` automatically bumps the version on 410 Gone, for Aula's own
+  URLs only since 1.20.0
 - `_set_correct_api_version()` discovers the correct version during `init()`
 
 ### Package Exports
@@ -1819,6 +1896,8 @@ from aula import (
     HttpRequestError, AulaAuthenticationError, AulaConnectionError,
     AulaNotFoundError, AulaRateLimitError, AulaServerError,
     AulaRejectedError,                    # 1.17.0
+    ProviderAuthenticationError,          # 1.20.0
+    TerminalQRDisplay,                    # 1.19.0
     TokenStorage, FileTokenStorage,
     Profile, Child, DailyOverview, Message, MessageThread,
     CalendarEvent, WidgetConfiguration,
