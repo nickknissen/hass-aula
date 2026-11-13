@@ -13,6 +13,7 @@ from aula import (
     AulaRejectedError,
     AulaServerError,
     HttpRequestError,
+    ProviderAuthenticationError,
 )
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from freezegun.api import FrozenDateTimeFactory
@@ -23,6 +24,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from custom_components.hass_aula.const import (
     MAX_PREVIEW_CHARS,
     TRANSIENT_FAILURE_TOLERANCE,
+    WIDGET_BIBLIOTEKET,
     WIDGET_MIN_UDDANNELSE_SSO,
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
@@ -550,6 +552,30 @@ async def test_library_coordinator_connection_error(hass: HomeAssistant) -> None
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
+
+
+async def test_library_coordinator_provider_refusal_keeps_the_session(
+    hass: HomeAssistant,
+) -> None:
+    """A provider refusing its widget token fails the poll without a new session."""
+    client = AsyncMock()
+    client.widgets = MagicMock()
+    client.widgets.get_library_status = AsyncMock(
+        side_effect=ProviderAuthenticationError(
+            "Provider refused widget (HTTP 401)", 401, widget_id=WIDGET_BIBLIOTEKET
+        )
+    )
+
+    profile = mock_profile()
+    ctx = _create_widget_context()
+    tm = _create_token_manager()
+    coordinator = AulaLibraryCoordinator(hass, client, profile, ctx, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+    tm.async_refresh_and_rebuild_client.assert_not_awaited()
+    tm.async_rebuild_after_rejection.assert_not_awaited()
 
 
 async def test_library_coordinator_multi_child(hass: HomeAssistant) -> None:
