@@ -9,8 +9,13 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from aula import AulaAuthenticationError, TokenStorage, create_client
-from aula.auth.exceptions import MitIDAuthError
+from aula import (
+    AulaAuthenticationError,
+    AulaConnectionError,
+    TokenStorage,
+    create_client,
+)
+from aula.auth.exceptions import MitIDAuthError, NetworkError
 from aula.auth.mitid_client import MitIDAuthClient
 from aula.http_httpx import HttpxHttpClient
 
@@ -152,6 +157,9 @@ class AulaTokenManager:
                 httpx_client=httpx_client,
             )
             new_tokens = await auth_client.refresh_access_token(refresh_token)
+        except NetworkError as err:
+            # Down or unreachable, which says nothing about the refresh token.
+            raise AulaConnectionError(str(err)) from err
         except MitIDAuthError as err:
             msg = f"Token refresh failed: {err}"
             raise AulaAuthenticationError(msg, 0) from err

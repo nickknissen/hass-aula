@@ -239,12 +239,12 @@ async def async_migrate_entry(
     return True
 
 
-async def async_setup_entry(
+async def _async_client_from_stored_tokens(
     hass: HomeAssistant,
     entry: AulaConfigEntry,
-) -> bool:
-    """Set up Aula from a config entry."""
-    token_manager = AulaTokenManager(hass, entry)
+    token_manager: AulaTokenManager,
+) -> AulaApiClient:
+    """Create the client from the stored tokens, refreshing once if Aula refuses."""
     token_data = entry.data[CONF_TOKEN_DATA]
     cookies = token_data.get("cookies", {})
 
@@ -264,12 +264,27 @@ async def async_setup_entry(
                 translation_domain=DOMAIN,
                 translation_key="auth_failed",
             ) from refresh_err
+        except HttpRequestError as err:
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="connection_failed",
+            ) from err
     except HttpRequestError as err:
         await http_client.close()
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key="connection_failed",
         ) from err
+    return client
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: AulaConfigEntry,
+) -> bool:
+    """Set up Aula from a config entry."""
+    token_manager = AulaTokenManager(hass, entry)
+    client = await _async_client_from_stored_tokens(hass, entry, token_manager)
 
     try:
         profile = await client.get_profile()
