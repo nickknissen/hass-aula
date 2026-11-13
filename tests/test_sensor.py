@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aula import AulaConnectionError, AulaServerError
-from aula.models.presence import PresenceState
+from aula.models.presence import ActivityType, PresenceState
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -157,6 +157,64 @@ async def test_presence_sensor_attributes(
     # The recorder and the websocket API both JSON-encode state attributes, so
     # publishing the object itself breaks them rather than the assertion above.
     json.dumps(dict(state.attributes), cls=JSONEncoder)
+
+
+async def test_presence_sensor_spare_time_activity_is_not_a_self_decider_window(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A send-home day's spare-time activity leaves the self-decider window empty."""
+    freezer.move_to("2024-01-15 12:00:00+00:00")
+    mock_aula_client.get_daily_overview = AsyncMock(return_value=mock_daily_overview())
+    mock_aula_client.get_presence_templates = AsyncMock(
+        return_value=mock_presence_templates(
+            child_id=1,
+            by_date="2024-01-15",
+            activity_type=ActivityType.SEND_HOME,
+            spare_time_start="15:00",
+            spare_time_end="16:00",
+        )
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_presence_status")
+    assert state is not None
+    assert state.attributes["self_decider_start_time"] is None
+    assert state.attributes["self_decider_end_time"] is None
+
+
+async def test_presence_sensor_ignores_a_self_decider_window_on_another_day_type(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A window left over from a self-decider plan is not shown on a send-home day."""
+    freezer.move_to("2024-01-15 12:00:00+00:00")
+    mock_aula_client.get_daily_overview = AsyncMock(return_value=mock_daily_overview())
+    mock_aula_client.get_presence_templates = AsyncMock(
+        return_value=mock_presence_templates(
+            child_id=1,
+            by_date="2024-01-15",
+            activity_type=ActivityType.SEND_HOME,
+            self_decider_start="14:00",
+            self_decider_end="16:30",
+        )
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_presence_status")
+    assert state is not None
+    assert state.attributes["self_decider_start_time"] is None
+    assert state.attributes["self_decider_end_time"] is None
 
 
 async def test_presence_sensor_survives_a_transient_api_failure(

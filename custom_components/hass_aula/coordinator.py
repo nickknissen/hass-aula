@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from aula import (
+    ActivityType,
     AulaAuthenticationError,
     AulaRejectedError,
     CalendarEvent,
@@ -262,11 +263,11 @@ def _extract_self_decider_times(
         if not ip or ip.id is None:
             continue
         for day in week_tmpl.day_templates:
-            if day.by_date != today_iso:
-                continue
-            sta = day.spare_time_activity
-            if sta:
-                result[ip.id] = (sta.start_time, sta.end_time)
+            if (
+                day.by_date == today_iso
+                and day.activity_type == ActivityType.SELF_DECIDER.value
+            ):
+                result[ip.id] = (day.self_decider_start_time, day.self_decider_end_time)
     return result
 
 
