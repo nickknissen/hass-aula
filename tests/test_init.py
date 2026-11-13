@@ -142,6 +142,28 @@ async def test_setup_entry_auth_error_refresh_succeeds(
         assert entry.runtime_data.client is refreshed_client
 
 
+async def test_setup_entry_auth_error_refresh_cannot_reach_aula(
+    hass: HomeAssistant,
+) -> None:
+    """Setup retries when the refresh after an auth error cannot reach Aula."""
+    with (
+        patch(
+            "custom_components.hass_aula.create_client",
+            side_effect=AulaAuthenticationError("Auth failed", 401),
+        ),
+        patch(
+            "custom_components.hass_aula.AulaTokenManager.async_refresh_token",
+            side_effect=AulaConnectionError("Token server unavailable: HTTP 503"),
+        ),
+    ):
+        entry = make_config_entry()
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
 async def test_setup_entry_connection_error(
     hass: HomeAssistant,
 ) -> None:

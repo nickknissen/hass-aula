@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aula import AulaAuthenticationError
-from aula.auth.exceptions import OAuthError
+from aula import AulaAuthenticationError, AulaConnectionError
+from aula.auth.exceptions import NetworkError, OAuthError
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
@@ -146,8 +146,24 @@ async def test_async_refresh_token_no_refresh_token(hass: HomeAssistant) -> None
         await tm.async_refresh_token()
 
 
-async def test_async_refresh_token_oauth_error(hass: HomeAssistant) -> None:
-    """Test refresh raises AulaAuthenticationError on OAuthError."""
+@pytest.mark.parametrize(
+    ("refresh_error", "raised", "match"),
+    [
+        (OAuthError("Token expired"), AulaAuthenticationError, "Token refresh failed"),
+        (
+            NetworkError("Token server unavailable: HTTP 503"),
+            AulaConnectionError,
+            "Token server unavailable",
+        ),
+    ],
+)
+async def test_async_refresh_token_error(
+    hass: HomeAssistant,
+    refresh_error: Exception,
+    raised: type[Exception],
+    match: str,
+) -> None:
+    """A rejected refresh token needs reauth; a down token server does not."""
     entry = _make_entry(hass)
     tm = AulaTokenManager(hass, entry)
 
@@ -164,12 +180,10 @@ async def test_async_refresh_token_oauth_error(hass: HomeAssistant) -> None:
         mock_httpx.return_value = mock_httpx_inst
 
         mock_auth = MagicMock()
-        mock_auth.refresh_access_token = AsyncMock(
-            side_effect=OAuthError("Token expired")
-        )
+        mock_auth.refresh_access_token = AsyncMock(side_effect=refresh_error)
         mock_auth_cls.return_value = mock_auth
 
-        with pytest.raises(AulaAuthenticationError, match="Token refresh failed"):
+        with pytest.raises(raised, match=match):
             await tm.async_refresh_token()
 
         mock_httpx_inst.aclose.assert_called_once()

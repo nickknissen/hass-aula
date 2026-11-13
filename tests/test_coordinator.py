@@ -156,6 +156,28 @@ async def test_presence_coordinator_auth_error_refresh_succeeds(
     tm.async_refresh_and_rebuild_client.assert_awaited_once_with(client)
 
 
+async def test_presence_coordinator_auth_error_refresh_cannot_reach_aula(
+    hass: HomeAssistant,
+) -> None:
+    """A refresh that cannot reach Aula fails the poll instead of asking for reauth."""
+    client = AsyncMock()
+    client.get_daily_overview = AsyncMock(
+        side_effect=AulaAuthenticationError("Auth failed", 401)
+    )
+    client.get_presence_templates = AsyncMock(return_value=[])
+
+    profile = mock_profile()
+    tm = _create_token_manager()
+    tm.async_refresh_and_rebuild_client = AsyncMock(
+        side_effect=AulaConnectionError("Token server unavailable: HTTP 503")
+    )
+    coordinator = AulaPresenceCoordinator(hass, client, profile, tm)
+    coordinator.config_entry = _create_config_entry()
+
+    with pytest.raises(UpdateFailed, match="Token server unavailable"):
+        await coordinator._async_update_data()
+
+
 def _rejecting_presence_coordinator(
     hass: HomeAssistant, err: HttpRequestError
 ) -> tuple[AulaPresenceCoordinator, AsyncMock, AsyncMock]:

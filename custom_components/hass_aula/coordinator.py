@@ -85,6 +85,9 @@ async def _aula_api_errors(
             raise UpdateFailed(msg) from err
         except AulaAuthenticationError:
             pass
+        except HttpRequestError as refresh_err:
+            msg = f"Could not refresh the session: {refresh_err}"
+            raise UpdateFailed(msg) from refresh_err
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="auth_failed",
