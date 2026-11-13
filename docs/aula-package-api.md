@@ -1,6 +1,6 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.20.0`
+> **Package:** `aula==1.21.0`
 > **Source:** `../aula` (relative to this repo)
 > **Last updated:** 2026-11-13
 
@@ -412,7 +412,16 @@ class DailyOverview(AulaDataClass):
     exit_time: str | None = None
     exit_with: str | None = None
     comment: str | None = None
+    is_default_entry_time: bool = False            # 1.21.0
+    is_default_exit_time: bool = False             # 1.21.0
+    self_decider_start_time: str | None = None     # 1.21.0
+    self_decider_end_time: str | None = None       # 1.21.0
 ```
+
+`is_default_entry_time` and `is_default_exit_time` are `True` when the time is the
+institution's placeholder, not a real plan (the Aula app shows "Ikke udfyldt"). On a day
+without a plan the overview still carries placeholder times such as `06:30` and `23:59`.
+`DayTemplate` has the same four fields.
 
 ### PresenceLocation
 
@@ -1151,6 +1160,10 @@ class DayTemplate(AulaDataClass):
     exit_with: str | None = None
     comment: str | None = None
     spare_time_activity: SpareTimeActivity | None = None
+    is_default_entry_time: bool = False            # 1.21.0
+    is_default_exit_time: bool = False             # 1.21.0
+    self_decider_start_time: str | None = None     # 1.21.0, not spare_time_activity
+    self_decider_end_time: str | None = None       # 1.21.0
 
 @dataclass
 class SpareTimeActivity(AulaDataClass):
