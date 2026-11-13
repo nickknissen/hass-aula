@@ -107,7 +107,7 @@ The following entities are created **per child**:
 | `entry_time` | Time the child entered the building |
 | `exit_time` | Time the child exited the building |
 | `exit_with` | Name of the person who collected the child, as Aula records it |
-| `self_decider_start_time` | Start of today's self-decider window, read from the spare-time-activity slot of today's presence week template |
+| `self_decider_start_time` | Start of today's self-decider window, from today's presence template. Empty on a day that is not a self-decider day |
 | `self_decider_end_time` | End of that window |
 | `location` | Current reported location |
 | `sleep_intervals` | Naps as the institution registered them, e.g. `[{"id": 27707363, "startTime": "12:05:00", "endTime": "13:15:00"}]`. Mostly relevant for daycare. Passed through as delivered, so the keys are whatever the API sends |

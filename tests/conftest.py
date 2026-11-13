@@ -28,7 +28,7 @@ from aula.models.mu_weekly_letter import (
     MUWeeklyPerson,
 )
 from aula.models.notification import Notification
-from aula.models.presence import PresenceState
+from aula.models.presence import ActivityType, PresenceState
 from aula.models.presence_location import PresenceLocation
 from pytest_homeassistant.common import MockConfigEntry
 
@@ -155,10 +155,13 @@ def mock_daily_overview(
 def mock_presence_templates(
     child_id: int = 1,
     by_date: str = "2024-01-15",
+    activity_type: ActivityType = ActivityType.SELF_DECIDER,
     self_decider_start: str | None = None,
     self_decider_end: str | None = None,
+    spare_time_start: str | None = None,
+    spare_time_end: str | None = None,
 ) -> list[MagicMock]:
-    """Create a mock PresenceWeekTemplate list with spare time activity."""
+    """Create a mock PresenceWeekTemplate list with one day template."""
     from aula.models.presence_template import (
         DayTemplate,
         PresenceWeekTemplate,
@@ -166,13 +169,16 @@ def mock_presence_templates(
     )
 
     sta = None
-    if self_decider_start or self_decider_end:
+    if spare_time_start or spare_time_end:
         sta = MagicMock(spec=SpareTimeActivity)
-        sta.start_time = self_decider_start
-        sta.end_time = self_decider_end
+        sta.start_time = spare_time_start
+        sta.end_time = spare_time_end
 
     day = MagicMock(spec=DayTemplate)
     day.by_date = by_date
+    day.activity_type = activity_type.value
+    day.self_decider_start_time = self_decider_start
+    day.self_decider_end_time = self_decider_end
     day.spare_time_activity = sta
 
     ip = MagicMock()
