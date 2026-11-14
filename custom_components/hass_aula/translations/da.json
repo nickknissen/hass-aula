@@ -180,6 +180,24 @@
     },
     "thread_not_in_own_mailbox": {
       "message": "Tråd {thread_id} ligger ikke i din egen indbakke, f.eks. fordi den er i en fælles indbakke, og kan derfor ikke markeres som læst."
+    },
+    "attachment_not_found": {
+      "message": "Vedhæftet fil {attachment_id} findes ikke i de nyeste beskeder i tråd {thread_id}. Tag id'et fra handlingen Hent beskeder i tråd."
+    },
+    "attachment_not_downloadable": {
+      "message": "Den vedhæftede fil \"{name}\" kan ikke hentes. Kun filer og billeder, der ligger i Aula, kan hentes, ikke links til et cloud-drev eller sikre dokumenter."
+    },
+    "attachment_too_large": {
+      "message": "Den vedhæftede fil \"{name}\" er større end {max_mb} MB og blev derfor ikke hentet."
+    },
+    "attachment_download_failed": {
+      "message": "Hentning af den vedhæftede fil \"{name}\" fejlede med HTTP-status {status}."
+    },
+    "attachment_save_failed": {
+      "message": "Den vedhæftede fil kunne ikke gemmes i {path}: {error}"
+    },
+    "no_media_folder": {
+      "message": "Home Assistant har ingen mediemappe at gemme den vedhæftede fil i. Opsæt en mediemappe (media_dirs) og prøv igen."
     }
   },
   "services": {
@@ -254,6 +272,34 @@
         "config_entry_id": {
           "name": "Konto",
           "description": "Hvilken Aula-konto tråden hører til. Kun nødvendig når der er konfigureret mere end én."
+        }
+      }
+    },
+    "download_attachment": {
+      "name": "Hent vedhæftet fil",
+      "description": "Gemmer en vedhæftet fil fra en besked i mappen aula i din mediemappe, så en automatisering kan sende den videre, f.eks. til ai_task.generate_data. Kun filer og billeder, der ligger i Aula, kan hentes, op til 25 MB.",
+      "fields": {
+        "thread_id": {
+          "name": "Tråd-id",
+          "description": "Tråden som den vedhæftede fil ligger i."
+        },
+        "attachment_id": {
+          "name": "Vedhæftnings-id",
+          "description": "Den vedhæftede fil der skal hentes. Id'et findes i svaret fra handlingen Hent beskeder i tråd. Filen skal ligge i en af de 5 nyeste beskeder i tråden."
+        },
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Hvilken Aula-konto tråden hører til. Kun nødvendig når der er konfigureret mere end én."
+        }
+      }
+    },
+    "clear_attachments": {
+      "name": "Ryd vedhæftede filer",
+      "description": "Sletter de vedhæftede filer, som Hent vedhæftet fil har gemt i mappen aula i din mediemappe. Andre medier røres ikke.",
+      "fields": {
+        "days": {
+          "name": "Ældre end (dage)",
+          "description": "Slet kun vedhæftede filer, der blev gemt for mere end så mange dage siden. Lad feltet stå tomt for at slette samtlige."
         }
       }
     }

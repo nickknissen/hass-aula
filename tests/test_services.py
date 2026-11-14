@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
+import time
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import probatio
 import pytest
 import yaml
@@ -22,18 +25,28 @@ from aula import (
     AulaApiClient,
     AulaAuthenticationError,
     AulaConnectionError,
+    DownloadTooLargeError,
     HttpRequestError,
 )
 from aula.api_client import ThreadScanLimitError
+from homeassistant.components import media_source
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.core import Context
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+)
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service import async_get_all_descriptions
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 
 from custom_components.hass_aula import services
 from custom_components.hass_aula.const import (
     DOMAIN,
+    SERVICE_CLEAR_ATTACHMENTS,
+    SERVICE_DOWNLOAD_ATTACHMENT,
     SERVICE_GET_THREAD_MESSAGES,
     SERVICE_MARK_THREAD_READ,
     SERVICE_UPDATE_PRESENCE,
@@ -43,7 +56,7 @@ from .conftest import make_config_entry, mock_child, mock_message, mock_profile
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry, MockUser
 
 
 async def _setup_integration(
@@ -1014,3 +1027,480 @@ async def test_mark_thread_read_failure_raises(
         )
 
     assert exc_info.value.translation_key == "action_failed"
+
+
+async def _download(hass: HomeAssistant, **data: Any) -> dict[str, Any]:
+    """Call download_attachment and return its response."""
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_DOWNLOAD_ATTACHMENT,
+        data,
+        blocking=True,
+        return_response=True,
+    )
+    assert response is not None
+    return dict(response)
+
+
+def _thread_with(*attachments: Attachment) -> AsyncMock:
+    """Return a get_messages_for_thread mock whose newest message has attachments."""
+    return AsyncMock(
+        return_value=[mock_message(has_attachments=True, attachments=list(attachments))]
+    )
+
+
+async def test_download_attachment_saves_file_in_media_folder(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """The file lands in an aula folder in the media folder, named after its id."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="Ugeplan uge 47.pdf",
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"%PDF-1.7")
+
+    response = await _download(hass, thread_id="42", attachment_id=123)
+
+    saved = tmp_path / "aula" / "123_ugeplan_uge_47.pdf"
+    assert response == {
+        "path": str(saved),
+        "media_content_id": (
+            "media-source://media_source/local/aula/123_ugeplan_uge_47.pdf"
+        ),
+        "content_type": "application/pdf",
+    }
+    assert saved.read_bytes() == b"%PDF-1.7"
+    mock_aula_client.get_messages_for_thread.assert_awaited_once_with("42", limit=5)
+    mock_aula_client.download_file.assert_awaited_once_with(
+        "https://example.com/plan.pdf", max_bytes=25 * 1024 * 1024
+    )
+    inspect.signature(AulaApiClient.download_file).bind(
+        None,
+        *mock_aula_client.download_file.await_args.args,
+        **mock_aula_client.download_file.await_args.kwargs,
+    )
+
+
+async def test_download_attachment_media_content_id_resolves_to_saved_file(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """The returned id opens the saved file, also when no media folder is "local"."""
+    school_dir = tmp_path / "school"
+    hass.config.media_dirs = {
+        "school": str(school_dir),
+        "recordings": str(tmp_path / "recordings"),
+    }
+    await _setup_integration(hass, mock_aula_client)
+    assert await async_setup_component(hass, "media_source", {})
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="Ugeplan uge 47.pdf",
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"%PDF-1.7")
+
+    response = await _download(hass, thread_id="42", attachment_id=123)
+
+    media = await media_source.async_resolve_media(
+        hass, response["media_content_id"], None
+    )
+    assert media.path == school_dir / "aula" / "123_ugeplan_uge_47.pdf"
+    assert media.mime_type == "application/pdf"
+
+
+@pytest.mark.parametrize(
+    ("name", "file_name"),
+    [
+        ("Høstfest på skolen.JPG", "123_hostfest_pa_skolen.jpg"),
+        ("Plan~1..final.pdf", "123_plan_1_final.pdf"),
+        ("Plan.pd~f", "123_plan.pd_f"),
+        ("../../secret.pdf", "123_secret.pdf"),
+        ("Invitation", "123_invitation"),
+        ("", "123_unknown"),
+        (f"{'a' * 150}.pdf", f"123_{'a' * 100}.pdf"),
+    ],
+)
+async def test_download_attachment_cleans_the_file_name(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+    name: str,
+    file_name: str,
+) -> None:
+    """The name is cleaned so the media source, and so ai_task, can open it."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    assert await async_setup_component(hass, "media_source", {})
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name=name,
+            file=AttachmentFile(id=11, url="https://example.com/file"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"content")
+
+    response = await _download(hass, thread_id="42", attachment_id=123)
+
+    assert Path(response["path"]) == tmp_path / "aula" / file_name
+    assert (tmp_path / "aula" / file_name).read_bytes() == b"content"
+    if response["content_type"] is not None:
+        media = await media_source.async_resolve_media(
+            hass, response["media_content_id"], None
+        )
+        assert media.path == tmp_path / "aula" / file_name
+
+
+@pytest.mark.parametrize(
+    "attachment",
+    [
+        Attachment(
+            id=123,
+            name="Invitation",
+            link=AttachmentLink(service="onedrive", url="https://example.com/inv"),
+        ),
+        Attachment(
+            id=123,
+            name="Secure note",
+            document=AttachmentDocument(id=44, title="Secure note"),
+        ),
+        Attachment(id=123, name="Unknown"),
+    ],
+    ids=["link", "document", "no_type"],
+)
+async def test_download_attachment_refuses_what_aula_does_not_store(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+    attachment: Attachment,
+) -> None:
+    """Cloud links, secure documents and unknown kinds fail before any download."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(attachment)
+    mock_aula_client.download_file = AsyncMock(return_value=b"content")
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=123)
+
+    assert exc_info.value.translation_key == "attachment_not_downloadable"
+    mock_aula_client.download_file.assert_not_awaited()
+    assert not (tmp_path / "aula").exists()
+
+
+async def test_download_attachment_saves_a_gallery_item(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """A gallery image is stored in Aula, so it downloads like a file."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=124,
+            name="Theme day.jpg",
+            media=AttachmentMedia(title="Theme day", media_type="image"),
+            file=AttachmentFile(id=12, url="https://example.com/theme-day.jpg"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"\xff\xd8")
+
+    response = await _download(hass, thread_id="42", attachment_id=124)
+
+    assert response["content_type"] == "image/jpeg"
+    assert (tmp_path / "aula" / "124_theme_day.jpg").read_bytes() == b"\xff\xd8"
+    mock_aula_client.download_file.assert_awaited_once_with(
+        "https://example.com/theme-day.jpg", max_bytes=25 * 1024 * 1024
+    )
+
+
+async def test_download_attachment_not_in_newest_messages(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """An id that is not in the newest five messages fails with a clear error."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="plan.pdf",
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"content")
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=999)
+
+    assert exc_info.value.translation_key == "attachment_not_found"
+    assert exc_info.value.translation_placeholders == {
+        "attachment_id": "999",
+        "thread_id": "42",
+    }
+    mock_aula_client.download_file.assert_not_awaited()
+
+
+async def test_download_attachment_too_large(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """A file over the limit fails as a validation error and nothing is saved."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="video.mp4",
+            file=AttachmentFile(id=11, url="https://example.com/video.mp4"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(
+        side_effect=DownloadTooLargeError(
+            "Download from example.com is larger than 26214400 bytes",
+            max_bytes=26214400,
+        )
+    )
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=123)
+
+    assert exc_info.value.translation_key == "attachment_too_large"
+    assert exc_info.value.translation_placeholders == {
+        "name": "video.mp4",
+        "max_mb": "25",
+    }
+    assert not (tmp_path / "aula").exists()
+
+
+async def test_download_attachment_refused_by_the_file_server(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """A refused download names the status, never the signed URL."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    url = "https://example.com/plan.pdf?signature=secret"
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(id=123, name="plan.pdf", file=AttachmentFile(id=11, url=url))
+    )
+    request = httpx.Request("GET", url)
+    mock_aula_client.download_file = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            f"Client error '403 Forbidden' for url '{url}'",
+            request=request,
+            response=httpx.Response(403, request=request),
+        )
+    )
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=123)
+
+    assert not isinstance(exc_info.value, ServiceValidationError)
+    assert exc_info.value.translation_key == "attachment_download_failed"
+    assert exc_info.value.translation_placeholders == {
+        "name": "plan.pdf",
+        "status": "403",
+    }
+    assert not (tmp_path / "aula").exists()
+
+
+@pytest.mark.parametrize("blocked", ["media_folder_is_a_file", "name_is_a_folder"])
+async def test_download_attachment_save_fails(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+    blocked: str,
+) -> None:
+    """A file that cannot be written fails with the path it was meant for."""
+    media_dir = tmp_path / "media"
+    target = media_dir / "aula" / "123_plan.pdf"
+    if blocked == "media_folder_is_a_file":
+        media_dir.write_text("not a folder")
+    else:
+        (target / "taken").mkdir(parents=True)
+    hass.config.media_dirs = {"local": str(media_dir)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="plan.pdf",
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"%PDF-1.7")
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=123)
+
+    assert not isinstance(exc_info.value, ServiceValidationError)
+    assert exc_info.value.translation_key == "attachment_save_failed"
+    assert exc_info.value.translation_placeholders is not None
+    assert exc_info.value.translation_placeholders["path"] == str(target)
+
+
+async def test_download_attachment_without_media_folder(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Without a media folder there is nowhere to save, so nothing is downloaded."""
+    hass.config.media_dirs = {}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.download_file = AsyncMock(return_value=b"content")
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _download(hass, thread_id="42", attachment_id=123)
+
+    assert exc_info.value.translation_key == "no_media_folder"
+    mock_aula_client.download_file.assert_not_awaited()
+
+
+async def test_download_attachment_again_replaces_the_copy(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Downloading the same attachment twice keeps one file, the newest."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="plan.pdf",
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(side_effect=[b"first", b"second"])
+
+    await _download(hass, thread_id="42", attachment_id=123)
+    await _download(hass, thread_id="42", attachment_id=123)
+
+    assert [p.name for p in (tmp_path / "aula").iterdir()] == ["123_plan.pdf"]
+    assert (tmp_path / "aula" / "123_plan.pdf").read_bytes() == b"second"
+
+
+async def test_download_attachment_unknown_type_is_null(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """A name with no known type gives a null content_type, not a guess."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = _thread_with(
+        Attachment(
+            id=123,
+            name="Invitation",
+            file=AttachmentFile(id=11, url="https://example.com/invitation"),
+        )
+    )
+    mock_aula_client.download_file = AsyncMock(return_value=b"content")
+
+    response = await _download(hass, thread_id="42", attachment_id=123)
+
+    assert response["content_type"] is None
+
+
+async def _clear(hass: HomeAssistant, **data: Any) -> None:
+    """Call clear_attachments with the given data."""
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_CLEAR_ATTACHMENTS,
+        data,
+        blocking=True,
+    )
+
+
+async def test_clear_attachments_removes_saved_files(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Every saved attachment goes, and other media stays."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    folder = tmp_path / "aula"
+    folder.mkdir()
+    (folder / "123_plan.pdf").write_bytes(b"pdf")
+    (folder / "124_theme_day.jpg").write_bytes(b"jpg")
+    (tmp_path / "holiday.jpg").write_bytes(b"jpg")
+
+    await _clear(hass)
+
+    assert list(folder.iterdir()) == []
+    assert (tmp_path / "holiday.jpg").exists()
+
+
+async def test_clear_attachments_older_than_days(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """With days set, only files saved before that many days ago go."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    folder = tmp_path / "aula"
+    folder.mkdir()
+    now = time.time()
+    for name, age_days in (("123_old.pdf", 40), ("124_recent.pdf", 5)):
+        path = folder / name
+        path.write_bytes(b"pdf")
+        saved_at = now - age_days * 86400
+        os.utime(path, (saved_at, saved_at))
+
+    await _clear(hass, days=30)
+
+    assert [path.name for path in folder.iterdir()] == ["124_recent.pdf"]
+
+
+async def test_clear_attachments_before_anything_was_saved(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Clearing with no attachment folder yet is not an error."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+
+    await _clear(hass)
+
+    assert not (tmp_path / "aula").exists()
+
+
+async def test_clear_attachments_is_admin_only(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    hass_read_only_user: MockUser,
+    tmp_path: Path,
+) -> None:
+    """A user who is not an administrator cannot delete saved attachments."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    (tmp_path / "aula").mkdir()
+    (tmp_path / "aula" / "123_plan.pdf").write_bytes(b"pdf")
+
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_CLEAR_ATTACHMENTS,
+            {},
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+        )
+
+    assert (tmp_path / "aula" / "123_plan.pdf").exists()

@@ -49,11 +49,15 @@ TOKEN_CODE_LENGTH = 6
 SERVICE_UPDATE_PRESENCE = "update_presence"
 SERVICE_GET_THREAD_MESSAGES = "get_thread_messages"
 SERVICE_MARK_THREAD_READ = "mark_thread_read"
+SERVICE_DOWNLOAD_ATTACHMENT = "download_attachment"
+SERVICE_CLEAR_ATTACHMENTS = "clear_attachments"
 
 ATTR_ACTIVITY_TYPE = "activity_type"
+ATTR_ATTACHMENT_ID = "attachment_id"
 ATTR_COMMENT = "comment"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_DATE = "date"
+ATTR_DAYS = "days"
 ATTR_ENTRY_TIME = "entry_time"
 ATTR_EXIT_TIME = "exit_time"
 ATTR_EXIT_WITH = "exit_with"
@@ -66,6 +70,13 @@ ATTR_THREAD_ID = "thread_id"
 # Aula's own message list pages at 10; 50 is a generous ceiling for one thread.
 MAX_THREAD_MESSAGES = 50
 DEFAULT_THREAD_MESSAGES = 5
+
+# Saved attachments go in this folder inside the first media folder.
+ATTACHMENT_FOLDER = "aula"
+MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+# Keeps a saved name well under the usual 255-byte file name limit.
+MAX_ATTACHMENT_NAME_LENGTH = 100
+MAX_CLEAR_DAYS = 3650
 
 ACTIVITY_TYPE_PICKED_UP_BY = "picked_up_by"
 

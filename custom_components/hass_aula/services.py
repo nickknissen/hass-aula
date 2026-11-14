@@ -3,15 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import mimetypes
 from dataclasses import dataclass
+from datetime import timedelta
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, cast
+
+import httpx
 
 try:
     import probatio as vol
 except ImportError:  # Home Assistant before 2026.9
     import voluptuous as vol  # type: ignore[no-redef]
-from aula import ActivityType, AulaAuthenticationError, HttpRequestError
+from aula import (
+    ActivityType,
+    AulaAuthenticationError,
+    DownloadTooLargeError,
+    HttpRequestError,
+)
 from aula.api_client import ThreadScanLimitError
+from homeassistant.components.media_source import generate_media_source_id
+from homeassistant.components.media_source.const import (
+    DOMAIN as MEDIA_SOURCE_DOMAIN,
+)
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_AREA_ID, ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import SupportsResponse, callback
@@ -19,15 +34,21 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
+from homeassistant.util.file import WriteError, write_utf8_file
 
 from .const import (
     ACTIVITY_TYPE_PICKED_UP_BY,
     ACTIVITY_TYPES,
+    ATTACHMENT_FOLDER,
     ATTR_ACTIVITY_TYPE,
+    ATTR_ATTACHMENT_ID,
     ATTR_COMMENT,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_DATE,
+    ATTR_DAYS,
     ATTR_ENTRY_TIME,
     ATTR_EXIT_TIME,
     ATTR_EXIT_WITH,
@@ -39,9 +60,14 @@ from .const import (
     DEFAULT_THREAD_MESSAGES,
     DOMAIN,
     LOGGER,
+    MAX_ATTACHMENT_BYTES,
+    MAX_ATTACHMENT_NAME_LENGTH,
+    MAX_CLEAR_DAYS,
     MAX_THREAD_MESSAGES,
     REPEAT_NEVER,
     REPEAT_PATTERNS,
+    SERVICE_CLEAR_ATTACHMENTS,
+    SERVICE_DOWNLOAD_ATTACHMENT,
     SERVICE_GET_THREAD_MESSAGES,
     SERVICE_MARK_THREAD_READ,
     SERVICE_UPDATE_PRESENCE,
@@ -93,6 +119,22 @@ MARK_THREAD_READ_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
         vol.Required(ATTR_THREAD_ID): cv.string,
+    }
+)
+
+DOWNLOAD_ATTACHMENT_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required(ATTR_THREAD_ID): cv.string,
+        vol.Required(ATTR_ATTACHMENT_ID): vol.Coerce(int),
+    }
+)
+
+CLEAR_ATTACHMENTS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_DAYS): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_CLEAR_DAYS)
+        ),
     }
 )
 
@@ -516,6 +558,132 @@ async def _async_mark_thread_read(call: ServiceCall) -> ServiceResponse:
     return {"thread_id": thread_id, "marked": marked}
 
 
+def _attachment_folder(hass: HomeAssistant) -> tuple[str, Path]:
+    """Return the first media folder's id and the attachment folder inside it."""
+    if not hass.config.media_dirs:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="no_media_folder",
+        )
+    source_dir_id, media_dir = next(iter(hass.config.media_dirs.items()))
+    return source_dir_id, Path(media_dir, ATTACHMENT_FOLDER)
+
+
+def _attachment_file_name(attachment: Attachment) -> str:
+    """Name the saved file after the attachment's id and its cleaned-up name."""
+    name = PurePath(attachment.name)
+    stem = slugify(name.stem)[:MAX_ATTACHMENT_NAME_LENGTH] or "unknown"
+    extension = slugify(name.suffix.removeprefix("."))
+    if not extension:
+        return f"{attachment.id}_{stem}"
+    return f"{attachment.id}_{stem}.{extension}"
+
+
+def _write_attachment(path: Path, content: bytes) -> None:
+    """Write a downloaded attachment, creating its folder when needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_utf8_file(str(path), content, mode="wb")
+
+
+async def _async_download_attachment(call: ServiceCall) -> ServiceResponse:
+    """Handle the download_attachment action."""
+    entry = _async_resolve_entry(call.hass, call)
+    thread_id: str = call.data[ATTR_THREAD_ID]
+    attachment_id: int = call.data[ATTR_ATTACHMENT_ID]
+    source_dir_id, folder = _attachment_folder(call.hass)
+
+    async def operation(client: AulaApiClient) -> tuple[Attachment, bytes]:
+        messages = await client.get_messages_for_thread(
+            thread_id, limit=DEFAULT_THREAD_MESSAGES
+        )
+        attachment = next(
+            (
+                attachment
+                for message in messages
+                for attachment in message.attachments
+                if attachment.id == attachment_id
+            ),
+            None,
+        )
+        if attachment is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="attachment_not_found",
+                translation_placeholders={
+                    "attachment_id": str(attachment_id),
+                    "thread_id": thread_id,
+                },
+            )
+        url = attachment.url
+        if _attachment_type(attachment) not in {"file", "media"} or url is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="attachment_not_downloadable",
+                translation_placeholders={"name": attachment.name},
+            )
+        try:
+            content = await client.download_file(url, max_bytes=MAX_ATTACHMENT_BYTES)
+        except DownloadTooLargeError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="attachment_too_large",
+                translation_placeholders={
+                    "name": attachment.name,
+                    "max_mb": str(MAX_ATTACHMENT_BYTES // (1024 * 1024)),
+                },
+            ) from err
+        except httpx.HTTPStatusError as err:
+            # Not chained: the httpx message carries the signed download URL.
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="attachment_download_failed",
+                translation_placeholders={
+                    "name": attachment.name,
+                    "status": str(err.response.status_code),
+                },
+            ) from None
+        return attachment, content
+
+    attachment, content = await _async_call_aula(entry, operation)
+    file_name = _attachment_file_name(attachment)
+    path = folder / file_name
+    try:
+        await call.hass.async_add_executor_job(_write_attachment, path, content)
+    except (OSError, WriteError) as err:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="attachment_save_failed",
+            translation_placeholders={"path": str(path), "error": str(err)},
+        ) from err
+
+    return {
+        "path": str(path),
+        "media_content_id": generate_media_source_id(
+            MEDIA_SOURCE_DOMAIN, f"{source_dir_id}/{ATTACHMENT_FOLDER}/{file_name}"
+        ),
+        "content_type": mimetypes.guess_type(file_name)[0],
+    }
+
+
+def _remove_attachments(folder: Path, saved_before: float) -> None:
+    """Delete the saved attachments last written before a timestamp."""
+    if not folder.is_dir():
+        return
+    for path in folder.iterdir():
+        if path.is_file() and path.stat().st_mtime < saved_before:
+            path.unlink()
+
+
+async def _async_clear_attachments(call: ServiceCall) -> None:
+    """Handle the clear_attachments action."""
+    _, folder = _attachment_folder(call.hass)
+    days: int | None = call.data.get(ATTR_DAYS)
+    saved_before = (
+        (dt_util.utcnow() - timedelta(days=days)).timestamp() if days else math.inf
+    )
+    await call.hass.async_add_executor_job(_remove_attachments, folder, saved_before)
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register the Aula actions."""
@@ -538,4 +706,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _async_mark_thread_read,
         schema=MARK_THREAD_READ_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DOWNLOAD_ATTACHMENT,
+        _async_download_attachment,
+        schema=DOWNLOAD_ATTACHMENT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_CLEAR_ATTACHMENTS,
+        _async_clear_attachments,
+        schema=CLEAR_ATTACHMENTS_SCHEMA,
     )
