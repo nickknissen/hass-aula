@@ -51,9 +51,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
     from datetime import date, datetime, time
 
-    from aula import AulaApiClient
+    from aula import Attachment, AulaApiClient
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
     from homeassistant.helpers.device_registry import AnyDeviceEntry
+    from homeassistant.util.json import JsonObjectType
 
     from .data import AulaConfigEntry
 
@@ -421,6 +422,36 @@ async def _async_update_presence(call: ServiceCall) -> None:
         await _async_apply(entry, child_ids, update)
 
 
+def _isoformat(value: datetime | None) -> str | None:
+    """Return a datetime as an ISO 8601 string, which a response can carry."""
+    return value.isoformat() if value is not None else None
+
+
+def _attachment_type(attachment: Attachment) -> str | None:
+    """Name the variant an attachment arrived as."""
+    # A gallery item also carries its file, so media has to win over file.
+    if attachment.media is not None:
+        return "media"
+    if attachment.file is not None:
+        return "file"
+    if attachment.link is not None:
+        return "link"
+    if attachment.document is not None:
+        return "document"
+    return None
+
+
+def _attachment_response(attachment: Attachment) -> JsonObjectType:
+    """Return the JSON-safe fields of an attachment."""
+    return {
+        "id": attachment.id,
+        "name": attachment.name,
+        "type": _attachment_type(attachment),
+        "url": attachment.url,
+        "created": _isoformat(attachment.created),
+    }
+
+
 async def _async_get_thread_messages(call: ServiceCall) -> ServiceResponse:
     """Handle the get_thread_messages action."""
     entry = _async_resolve_entry(call.hass, call)
@@ -442,6 +473,12 @@ async def _async_get_thread_messages(call: ServiceCall) -> ServiceResponse:
                 "id": message.id,
                 "content": message.content,
                 "content_markdown": message.content_markdown,
+                "sender": message.sender_name,
+                "sent_at": _isoformat(message.send_datetime),
+                "attachments": [
+                    _attachment_response(attachment)
+                    for attachment in message.attachments
+                ],
             }
             for message in messages
         ],
