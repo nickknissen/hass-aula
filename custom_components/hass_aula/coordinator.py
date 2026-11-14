@@ -16,6 +16,7 @@ from aula import (
     DailyOverview,
     HttpRequestError,
 )
+from aula.const import WIDGET_BIBLIOTEKET, WIDGET_EASYIQ_WEEKPLAN
 from aula.models import Message, MessageThread, MUTask, MUWeeklyPerson, Notification
 from aula.widgets import EasyIQChildNotInPortal, EasyIQWrongChildSession
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -40,8 +41,6 @@ from .const import (
     NOTIFICATIONS_POLL_INTERVAL,
     PRESENCE_POLL_INTERVAL,
     TRANSIENT_FAILURE_TOLERANCE,
-    WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ_WEEKPLAN,
 )
 from .data import (
     EasyIQChildData,
@@ -165,16 +164,6 @@ def _get_child_widget_id(child: Child) -> str:
     if raw:
         return str(raw["userId"])
     return str(child.id)
-
-
-def _get_child_institution_code(child: Child) -> str:
-    """Get the institution code for a child from its raw data."""
-    # TODO(aula-package): Child does not expose institutionCode as a public field.  # noqa: TD003, FIX002, E501
-    # Add Child.institution_code to the aula package, then replace this _raw access.
-    raw = child._raw  # noqa: SLF001
-    if raw:
-        return raw.get("institutionProfile", {}).get("institutionCode", "")
-    return ""
 
 
 class _PresenceChildData:
@@ -723,7 +712,7 @@ class AulaEasyIQCoordinator(
 
         async def _fetch_child(child: Child) -> tuple[int, EasyIQChildData]:
             child_id_str = _get_child_widget_id(child)
-            inst_code = _get_child_institution_code(child)
+            inst_code = child.institution_code or ""
             if not inst_code and self.widget_context.institution_filter:
                 inst_code = self.widget_context.institution_filter[0]
             inst_filter = [inst_code]

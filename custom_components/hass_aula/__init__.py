@@ -12,6 +12,15 @@ from aula import (
     HttpRequestError,
     create_client,
 )
+from aula.const import (
+    WIDGET_BIBLIOTEKET,
+    WIDGET_EASYIQ_HOMEWORK,
+    WIDGET_EASYIQ_WEEKPLAN,
+    WIDGET_HUSKELISTEN,
+    WIDGET_MIN_UDDANNELSE_SSO,
+    WIDGET_MIN_UDDANNELSE_TASKS,
+    WIDGET_MIN_UDDANNELSE_UGEPLAN,
+)
 from aula.http_httpx import HttpxHttpClient
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
@@ -28,13 +37,6 @@ from .const import (
     MU_TASK_WIDGETS,
     MU_UGEPLAN_WIDGETS,
     PLATFORMS,
-    WIDGET_BIBLIOTEKET,
-    WIDGET_EASYIQ_HOMEWORK,
-    WIDGET_EASYIQ_WEEKPLAN,
-    WIDGET_HUSKELISTEN,
-    WIDGET_MIN_UDDANNELSE_SSO,
-    WIDGET_MIN_UDDANNELSE_TASKS,
-    WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
 from .coordinator import (
     AulaCalendarCoordinator,
@@ -47,7 +49,6 @@ from .coordinator import (
     AulaMUUgeplanCoordinator,
     AulaNotificationsCoordinator,
     AulaPresenceCoordinator,
-    _get_child_institution_code,
     _get_child_widget_id,
 )
 from .data import AulaRuntimeData, WidgetContext
@@ -124,9 +125,8 @@ async def _build_widget_context(
 
     for child in profile.children:
         child_filter.append(_get_child_widget_id(child))
-        inst_code = _get_child_institution_code(child)
-        if inst_code:
-            institution_codes.add(inst_code)
+        if child.institution_code:
+            institution_codes.add(child.institution_code)
 
     return WidgetContext(
         child_filter=child_filter,

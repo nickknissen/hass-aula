@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from aula import AulaApiClient
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
-    from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.device_registry import AnyDeviceEntry
 
     from .data import AulaConfigEntry
 
@@ -112,7 +112,7 @@ class _PresenceUpdate:
 
 
 @callback
-def _child_id_from_device(device: DeviceEntry) -> int | None:
+def _child_id_from_device(device: AnyDeviceEntry) -> int | None:
     """
     Return the child's institution profile ID for an Aula child device.
 
@@ -161,7 +161,7 @@ def _async_resolve_device_ids(hass: HomeAssistant, call: ServiceCall) -> set[str
 
 @callback
 def _async_entry_for_device(
-    hass: HomeAssistant, device: DeviceEntry
+    hass: HomeAssistant, device: AnyDeviceEntry
 ) -> AulaConfigEntry:
     """Return the loaded Aula config entry that owns a device."""
     for entry_id in device.config_entries:

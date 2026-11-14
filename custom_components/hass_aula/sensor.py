@@ -29,6 +29,7 @@ from .entity import AulaAccountEntity, AulaEntity
 
 if TYPE_CHECKING:
     from aula import Child, Profile
+    from aula.models import MUTask, Notification
     from aula.models.meebook_weekplan import MeebookTask
     from aula.models.mu_weekly_letter import MUWeeklyLetter
     from homeassistant.core import HomeAssistant
@@ -263,7 +264,7 @@ class AulaChildNotificationsSensor(
         self._attr_unique_id = f"{child.id}_unread_notifications"
 
     @property
-    def _child_notifications(self) -> list:
+    def _child_notifications(self) -> list[Notification]:
         """Return notifications for this child."""
         notifications = self.coordinator.data or []
         return [n for n in notifications if n.institution_profile_id == self._child.id]
@@ -417,7 +418,7 @@ class AulaMUTasksSensor(AulaEntity[AulaMUTasksCoordinator], SensorEntity):
         self._attr_unique_id = f"{child.id}_mu_tasks"
 
     @property
-    def _tasks(self) -> list:
+    def _tasks(self) -> list[MUTask]:
         if not self.coordinator.data:
             return []
         return self.coordinator.data.get(self._child.id, [])

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -47,7 +47,7 @@ class LibraryChildData:
 
     loans: list[LibraryLoan] = field(default_factory=list)
     longterm_loans: list[LibraryLoan] = field(default_factory=list)
-    reservations: list[dict] = field(default_factory=list)
+    reservations: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -117,7 +117,7 @@ class AulaRuntimeData:
     huskelisten_coordinator: AulaHuskelistenCoordinator | None = None
 
     @property
-    def all_coordinators(self) -> Iterator[DataUpdateCoordinator]:
+    def all_coordinators(self) -> Iterator[DataUpdateCoordinator[Any]]:
         """Yield all active coordinators."""
         for coord in (
             self.presence_coordinator,
