@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aula import CalendarEvent, DailyOverview, Profile
+from aula import Attachment, CalendarEvent, DailyOverview, Profile
 from aula.models import (
     Appointment,
     EasyIQHomework,
@@ -285,12 +285,14 @@ def mock_message(
     sender: str | None = "Anne Jensen",
     send_date: str | None = "2026-08-10T07:15:00+00:00",
     has_attachments: bool = False,
+    *,
+    attachments: list[Attachment] | None = None,
 ) -> MagicMock:
     """
     Create a mock Message object.
 
-    ``has_attachments`` is pinned rather than left to the spec, which would
-    hand back a MagicMock that reads as True.
+    ``has_attachments`` and ``attachments`` are pinned rather than left to the
+    spec, which would hand back MagicMocks.
     """
     message = MagicMock(spec=Message)
     message.id = message_id
@@ -298,6 +300,7 @@ def mock_message(
     message.content = content
     message.content_markdown = content
     message.has_attachments = has_attachments
+    message.attachments = list(attachments or [])
     message.sender_name = sender
     message.send_datetime = datetime.fromisoformat(send_date) if send_date else None
     return message

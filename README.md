@@ -307,7 +307,7 @@ automation:
 
 ### `hass_aula.get_thread_messages`
 
-Returns the full text of the messages in one thread. The `latest_messages` sensor only carries 200-character previews, so this is how you read a whole message.
+Returns the full text of the messages in one thread, with each message's sender, send time and attachments. The `latest_messages` sensor only carries 200-character previews, so this is how you read a whole message.
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -329,7 +329,26 @@ sequence:
       message: "{{ thread.messages[0].content }}"
 ```
 
-Each entry in `messages` carries `id`, `content` (plain text) and `content_markdown`.
+Each entry in `messages` carries:
+
+| Key | Description |
+|-----|-------------|
+| `id` | Message ID |
+| `content` | The message as plain text |
+| `content_markdown` | The message as Markdown |
+| `sender` | Name of the sender, or `null` |
+| `sent_at` | When the message was sent, as an ISO 8601 string, or `null` |
+| `attachments` | The files and links attached to the message. An empty list when there are none |
+
+Each entry in `attachments` carries:
+
+| Key | Description |
+|-----|-------------|
+| `id` | Attachment ID, or `null` |
+| `name` | File name, link name or document title |
+| `type` | `file` (an uploaded file), `media` (a gallery image or video), `link` (a link to a cloud drive), `document` (a secure document), or `null` if Aula sent none of these |
+| `url` | Where the file or link points. `null` for a secure document |
+| `created` | When the attachment was added, as an ISO 8601 string, or `null` |
 
 ### `hass_aula.mark_thread_read`
 

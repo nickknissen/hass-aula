@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import inspect
-from datetime import date
+import json
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
@@ -13,6 +14,11 @@ import pytest
 import yaml
 from aula import (
     ActivityType,
+    Attachment,
+    AttachmentDocument,
+    AttachmentFile,
+    AttachmentLink,
+    AttachmentMedia,
     AulaApiClient,
     AulaAuthenticationError,
     AulaConnectionError,
@@ -578,10 +584,17 @@ async def test_get_thread_messages_returns_full_content(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
 ) -> None:
-    """The action returns plain and markdown content for each message."""
+    """The action returns content, sender and send time for each message."""
     await _setup_integration(hass, mock_aula_client)
     mock_aula_client.get_messages_for_thread = AsyncMock(
-        return_value=[mock_message(message_id="9", content="Kære forældre")]
+        return_value=[
+            mock_message(
+                message_id="9",
+                content="Kære forældre",
+                sender="Anne Jensen",
+                send_date="2026-11-10T07:15:00+00:00",
+            )
+        ]
     )
 
     response = await hass.services.async_call(
@@ -600,9 +613,141 @@ async def test_get_thread_messages_returns_full_content(
                 "id": "9",
                 "content": "Kære forældre",
                 "content_markdown": "Kære forældre",
+                "sender": "Anne Jensen",
+                "sent_at": "2026-11-10T07:15:00+00:00",
+                "attachments": [],
             }
         ],
     }
+
+
+async def test_get_thread_messages_missing_sender_and_send_time_are_null(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """A message without a sender or send time still comes back, with nulls."""
+    await _setup_integration(hass, mock_aula_client)
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(sender=None, send_date=None)]
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert response is not None
+    [message] = response["messages"]
+    assert message["sender"] is None
+    assert message["sent_at"] is None
+
+
+async def test_get_thread_messages_lists_attachments_by_type(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Each attachment says which variant it is, and a secure document has no URL."""
+    await _setup_integration(hass, mock_aula_client)
+    attachments = [
+        Attachment(
+            id=1,
+            name="plan.pdf",
+            created=datetime(2026, 11, 10, 7, 14, tzinfo=UTC),
+            file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+        ),
+        Attachment(
+            id=2,
+            name="theme-day.jpg",
+            media=AttachmentMedia(title="Theme day", media_type="image"),
+            file=AttachmentFile(id=12, url="https://example.com/theme-day.jpg"),
+        ),
+        Attachment(
+            id=3,
+            name="Invitation",
+            link=AttachmentLink(service="onedrive", url="https://example.com/inv"),
+        ),
+        Attachment(
+            id=4,
+            name="Secure note",
+            document=AttachmentDocument(id=44, title="Secure note"),
+        ),
+        Attachment(id=5, name="Unknown"),
+    ]
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(has_attachments=True, attachments=attachments)]
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert response is not None
+    [message] = response["messages"]
+    assert message["attachments"] == [
+        {
+            "id": 1,
+            "name": "plan.pdf",
+            "type": "file",
+            "url": "https://example.com/plan.pdf",
+            "created": "2026-11-10T07:14:00+00:00",
+        },
+        {
+            "id": 2,
+            "name": "theme-day.jpg",
+            "type": "media",
+            "url": "https://example.com/theme-day.jpg",
+            "created": None,
+        },
+        {
+            "id": 3,
+            "name": "Invitation",
+            "type": "link",
+            "url": "https://example.com/inv",
+            "created": None,
+        },
+        {
+            "id": 4,
+            "name": "Secure note",
+            "type": "document",
+            "url": None,
+            "created": None,
+        },
+        {"id": 5, "name": "Unknown", "type": None, "url": None, "created": None},
+    ]
+
+
+async def test_get_thread_messages_response_is_plain_json(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Datetimes and attachments go out as plain JSON types."""
+    await _setup_integration(hass, mock_aula_client)
+    attachment = Attachment(
+        id=1,
+        name="plan.pdf",
+        created=datetime(2026, 11, 10, 7, 14, tzinfo=UTC),
+        file=AttachmentFile(id=11, url="https://example.com/plan.pdf"),
+    )
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(has_attachments=True, attachments=[attachment])]
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_THREAD_MESSAGES,
+        {"thread_id": "42"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert json.loads(json.dumps(response)) == response
 
 
 async def test_get_thread_messages_honours_limit(
