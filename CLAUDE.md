@@ -74,6 +74,6 @@ Every `create_client` call gets `copy.deepcopy(token_data)` and `token_manager.t
 
 ## Project Conventions
 
-- Python 3.14, ruff with `select = ["ALL"]`, strict mypy
+- Python 3.14, ruff with `select = ["ALL"]`. `mypy.ini` asks for strict mypy, but no hook or CI job runs it yet.
 - Translations source of truth: `strings.json` — run `check_translations` to verify `translations/*.json` stay in sync
 - Pre-commit via [prek](https://prek.j178.dev) (`prek.toml`): ruff, codespell, yamllint, check-translations, pytest
