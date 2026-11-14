@@ -27,5 +27,8 @@ jobs:
       - name: Install requirements
         run: uv pip install -r requirements.txt
 
+      - name: Type check
+        run: mypy custom_components/hass_aula
+
       - name: Run tests
         run: pytest tests/ --cov=custom_components/hass_aula

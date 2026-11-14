@@ -9,6 +9,7 @@ scripts/test                          # run all tests (auto-creates .venv if nee
 scripts/test tests/test_sensor.py     # run a single test file
 scripts/test tests/test_sensor.py::test_presence_sensor_native_value  # single test
 scripts/lint                          # ruff format + ruff check --fix
+.venv/bin/mypy custom_components/hass_aula  # strict type check (prek and CI run it too)
 python3 scripts/check_translations    # verify translations match strings.json
 scripts/develop                       # run HA locally with the integration loaded
 scripts/release <version> [--dry-run] # bump version, tag, create GitHub release
