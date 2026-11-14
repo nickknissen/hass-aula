@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.21.0`
+> **Package:** `aula==1.22.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-11-13
+> **Last updated:** 2026-11-14
 
 ---
 
@@ -212,7 +212,13 @@ make Aula reject the request.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `download_file` | `async download_file(url: str) -> bytes` | Download a file as raw bytes |
+| `download_file` | `async download_file(url: str, *, max_bytes: int \| None = None) -> bytes` | Download a file as raw bytes, stopping past `max_bytes` (1.22.0) |
+
+With `max_bytes`, `HttpxHttpClient` refuses a `Content-Length` above the limit before reading
+the body, then streams the body and stops once it passes the limit. Both raise
+`DownloadTooLargeError`, which is not an `HttpRequestError`. Without `max_bytes` the whole body
+is read into memory. A non-2xx response raises `httpx.HTTPStatusError`, not an `aula`
+exception, and a transport error raises `AulaConnectionError`.
 
 ### Deprecated Widget Methods
 
@@ -1355,6 +1361,10 @@ HttpRequestError                 — Base; any non-2xx response
 
 All store `status_code: int` as an attribute.
 
+**Download limits (1.22.0):** `DownloadTooLargeError` subclasses `Exception` directly, outside
+the tree above, so `except HttpRequestError` does not catch it. It carries `max_bytes: int`,
+and its message names only the host. Raised by `download_file(url, max_bytes=...)`.
+
 **Network failures (1.19.0):** `HttpxHttpClient` raises `AulaConnectionError` for any httpx
 transport error (DNS, refused connection, timeout), with the httpx error as `__cause__`. Before
 1.19.0 these reached the caller as raw httpx exceptions.
@@ -1541,10 +1551,13 @@ class HttpClient(Protocol):
         json: Any | None = None,
     ) -> HttpResponse: ...
 
-    async def download_bytes(self, url: str) -> bytes: ...
+    async def download_bytes(self, url: str, *, max_bytes: int | None = None) -> bytes: ...
     def get_cookie(self, name: str) -> str | None: ...
     async def close(self) -> None: ...
 ```
+
+Since 1.22.0 a custom implementation must accept the keyword-only `max_bytes` on
+`download_bytes`.
 
 ### HttpResponse
 
@@ -1576,6 +1589,8 @@ class HttpxHttpClient:
 - If `httpx_client` is provided, caller retains ownership and must close it
 - `request()` and `download_bytes()` raise `AulaConnectionError` on httpx transport errors.
   The message names only the host, because the query string can carry credentials (1.19.0)
+- `download_bytes()` streams the response, so `max_bytes` stops a download before the whole
+  body is in memory (1.22.0)
 
 ---
 
@@ -1910,6 +1925,7 @@ from aula import (
     AulaNotFoundError, AulaRateLimitError, AulaServerError,
     AulaRejectedError,                    # 1.17.0
     ProviderAuthenticationError,          # 1.20.0
+    DownloadTooLargeError,                # 1.22.0
     TerminalQRDisplay,                    # 1.19.0
     TokenStorage, FileTokenStorage,
     Profile, Child, DailyOverview, Message, MessageThread,
