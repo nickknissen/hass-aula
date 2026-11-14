@@ -1124,11 +1124,13 @@ async def test_download_attachment_media_content_id_resolves_to_saved_file(
     [
         ("Høstfest på skolen.JPG", "123_hostfest_pa_skolen.jpg"),
         ("Plan~1..final.pdf", "123_plan_1_final.pdf"),
-        ("Plan.pd~f", "123_plan.pd_f"),
+        ("Plan.pd~f", "123_plan_pd_f"),
         ("../../secret.pdf", "123_secret.pdf"),
         ("Invitation", "123_invitation"),
         ("", "123_unknown"),
         (f"{'a' * 150}.pdf", f"123_{'a' * 100}.pdf"),
+        ("Referat d. 12. november", "123_referat_d_12_november"),
+        (f"Bilag 1. {'x' * 200}", f"123_bilag_1_{'x' * 92}"),
     ],
 )
 async def test_download_attachment_cleans_the_file_name(
@@ -1466,6 +1468,25 @@ async def test_clear_attachments_older_than_days(
     await _clear(hass, days=30)
 
     assert [path.name for path in folder.iterdir()] == ["124_recent.pdf"]
+
+
+@pytest.mark.parametrize("days", [0, 3651])
+async def test_clear_attachments_rejects_out_of_range_days(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    tmp_path: Path,
+    days: int,
+) -> None:
+    """Days outside 1-3650 are rejected before anything is deleted."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    (tmp_path / "aula").mkdir()
+    (tmp_path / "aula" / "123_plan.pdf").write_bytes(b"pdf")
+
+    with pytest.raises(probatio.Invalid):
+        await _clear(hass, days=days)
+
+    assert (tmp_path / "aula" / "123_plan.pdf").exists()
 
 
 async def test_clear_attachments_before_anything_was_saved(

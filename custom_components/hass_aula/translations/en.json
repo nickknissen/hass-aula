@@ -185,7 +185,7 @@
       "message": "Attachment {attachment_id} is not in the newest messages of thread {thread_id}. Take the ID from the Get thread messages action."
     },
     "attachment_not_downloadable": {
-      "message": "The attachment \"{name}\" cannot be downloaded. Only files and images stored in Aula can be, not links to a cloud drive or secure documents."
+      "message": "The attachment \"{name}\" cannot be downloaded. Only files and images stored in Aula can be downloaded. Links to a cloud drive and secure documents cannot."
     },
     "attachment_too_large": {
       "message": "The attachment \"{name}\" is larger than {max_mb} MB, so it was not downloaded."
@@ -197,7 +197,7 @@
       "message": "The attachment could not be saved to {path}: {error}"
     },
     "no_media_folder": {
-      "message": "Home Assistant has no media folder to save the attachment in. Set up a media folder (media_dirs) and try again."
+      "message": "Home Assistant has no media folder, which is where attachments are saved. Set up a media folder (media_dirs) and try again."
     }
   },
   "services": {

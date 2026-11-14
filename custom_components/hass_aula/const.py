@@ -71,11 +71,11 @@ ATTR_THREAD_ID = "thread_id"
 MAX_THREAD_MESSAGES = 50
 DEFAULT_THREAD_MESSAGES = 5
 
-# Saved attachments go in this folder inside the first media folder.
 ATTACHMENT_FOLDER = "aula"
 MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 # Keeps a saved name well under the usual 255-byte file name limit.
 MAX_ATTACHMENT_NAME_LENGTH = 100
+MAX_ATTACHMENT_EXTENSION_LENGTH = 10
 MAX_CLEAR_DAYS = 3650
 
 ACTIVITY_TYPE_PICKED_UP_BY = "picked_up_by"

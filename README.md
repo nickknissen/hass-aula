@@ -423,7 +423,9 @@ sequence:
     response_variable: result
 ```
 
-The AI providers in Home Assistant read images and PDFs. Other files, such as a DOCX, still download, but `ai_task.generate_data` refuses them. Saved PDFs do not show up in the media browser, which only lists images, video and audio, so use `hass_aula.clear_attachments` to delete them.
+The AI providers in Home Assistant read images and PDFs. Other files, such as a DOCX, still download, but `ai_task.generate_data` refuses them.
+
+The media browser only lists images, video and audio, so saved PDFs do not show up there. Use `hass_aula.clear_attachments` to delete them.
 
 ### `hass_aula.clear_attachments`
 
@@ -431,7 +433,7 @@ Deletes the files that `hass_aula.download_attachment` saved. Other files in you
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `days` | no | Only delete files saved more than this many days ago, 1–3650. Leave it out to delete all of them |
+| `days` | no | Only delete files saved more than this many days ago, from 1 to 3650. Leave it out to delete all of them |
 
 ```yaml
 action: hass_aula.clear_attachments

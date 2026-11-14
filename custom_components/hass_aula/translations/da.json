@@ -185,7 +185,7 @@
       "message": "Vedhæftet fil {attachment_id} findes ikke i de nyeste beskeder i tråd {thread_id}. Tag id'et fra handlingen Hent beskeder i tråd."
     },
     "attachment_not_downloadable": {
-      "message": "Den vedhæftede fil \"{name}\" kan ikke hentes. Kun filer og billeder, der ligger i Aula, kan hentes, ikke links til et cloud-drev eller sikre dokumenter."
+      "message": "Den vedhæftede fil \"{name}\" kan ikke hentes. Kun filer og billeder, der ligger i Aula, kan hentes. Links til et cloud-drev og sikre dokumenter kan ikke."
     },
     "attachment_too_large": {
       "message": "Den vedhæftede fil \"{name}\" er større end {max_mb} MB og blev derfor ikke hentet."
@@ -197,7 +197,7 @@
       "message": "Den vedhæftede fil kunne ikke gemmes i {path}: {error}"
     },
     "no_media_folder": {
-      "message": "Home Assistant har ingen mediemappe at gemme den vedhæftede fil i. Opsæt en mediemappe (media_dirs) og prøv igen."
+      "message": "Home Assistant har ingen mediemappe, og det er dér, vedhæftede filer gemmes. Opsæt en mediemappe (media_dirs) og prøv igen."
     }
   },
   "services": {

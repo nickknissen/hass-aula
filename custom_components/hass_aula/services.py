@@ -61,6 +61,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     MAX_ATTACHMENT_BYTES,
+    MAX_ATTACHMENT_EXTENSION_LENGTH,
     MAX_ATTACHMENT_NAME_LENGTH,
     MAX_CLEAR_DAYS,
     MAX_THREAD_MESSAGES,
@@ -572,11 +573,13 @@ def _attachment_folder(hass: HomeAssistant) -> tuple[str, Path]:
 def _attachment_file_name(attachment: Attachment) -> str:
     """Name the saved file after the attachment's id and its cleaned-up name."""
     name = PurePath(attachment.name)
-    stem = slugify(name.stem)[:MAX_ATTACHMENT_NAME_LENGTH] or "unknown"
-    extension = slugify(name.suffix.removeprefix("."))
+    stem, extension = name.stem, name.suffix.removeprefix(".")
+    if not extension.isalnum() or len(extension) > MAX_ATTACHMENT_EXTENSION_LENGTH:
+        stem, extension = name.name, ""
+    slug = slugify(stem)[:MAX_ATTACHMENT_NAME_LENGTH] or "unknown"
     if not extension:
-        return f"{attachment.id}_{stem}"
-    return f"{attachment.id}_{stem}.{extension}"
+        return f"{attachment.id}_{slug}"
+    return f"{attachment.id}_{slug}.{slugify(extension)}"
 
 
 def _write_attachment(path: Path, content: bytes) -> None:
@@ -614,8 +617,9 @@ async def _async_download_attachment(call: ServiceCall) -> ServiceResponse:
                     "thread_id": thread_id,
                 },
             )
-        url = attachment.url
-        if _attachment_type(attachment) not in {"file", "media"} or url is None:
+        # Uploads and gallery items carry a stored file; links and documents do not.
+        url = attachment.file.url if attachment.file is not None else None
+        if url is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="attachment_not_downloadable",
@@ -670,8 +674,11 @@ def _remove_attachments(folder: Path, saved_before: float) -> None:
     if not folder.is_dir():
         return
     for path in folder.iterdir():
-        if path.is_file() and path.stat().st_mtime < saved_before:
-            path.unlink()
+        try:
+            if path.is_file() and path.stat().st_mtime < saved_before:
+                path.unlink()
+        except OSError as err:
+            LOGGER.warning("Could not remove attachment %s: %s", path.name, err)
 
 
 async def _async_clear_attachments(call: ServiceCall) -> None:
