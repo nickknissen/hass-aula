@@ -285,6 +285,7 @@ def mock_message(
     sender: str | None = "Anne Jensen",
     send_date: str | None = "2026-08-10T07:15:00+00:00",
     has_attachments: bool = False,
+    *,
     attachments: list[Attachment] | None = None,
 ) -> MagicMock:
     """

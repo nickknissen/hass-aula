@@ -423,7 +423,7 @@ async def _async_update_presence(call: ServiceCall) -> None:
 
 
 def _isoformat(value: datetime | None) -> str | None:
-    """Return a datetime as an ISO 8601 string, which a response can carry."""
+    """Return a datetime as an ISO 8601 string."""
     return value.isoformat() if value is not None else None
 
 

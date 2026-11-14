@@ -338,7 +338,7 @@ Each entry in `messages` carries:
 | `content_markdown` | The message as Markdown |
 | `sender` | Name of the sender, or `null` |
 | `sent_at` | When the message was sent, as an ISO 8601 string, or `null` |
-| `attachments` | What is attached to the message. An empty list when nothing is |
+| `attachments` | The files and links attached to the message. An empty list when there are none |
 
 Each entry in `attachments` carries:
 
