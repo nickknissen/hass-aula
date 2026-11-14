@@ -8,7 +8,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
-import voluptuous as vol
+
+try:
+    import probatio as vol
+except ImportError:  # Home Assistant before 2026.9
+    import voluptuous as vol  # type: ignore[no-redef]
 from aula import WidgetConfiguration, authenticate, create_client
 from aula.auth.exceptions import PasswordInvalidError, TokenInvalidError
 from aula.auth.mitid_client import MitIDAuthClient

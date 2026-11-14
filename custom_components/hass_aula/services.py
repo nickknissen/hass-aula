@@ -6,7 +6,10 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
+try:
+    import probatio as vol
+except ImportError:  # Home Assistant before 2026.9
+    import voluptuous as vol  # type: ignore[no-redef]
 from aula import ActivityType, AulaAuthenticationError, HttpRequestError
 from aula.api_client import ThreadScanLimitError
 from homeassistant.config_entries import ConfigEntryState

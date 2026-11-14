@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
+import probatio
 import pytest
-import voluptuous as vol
 import yaml
 from aula import (
     ActivityType,
@@ -633,7 +633,7 @@ async def test_get_thread_messages_rejects_out_of_range_limit(
     """A limit outside 1-50 is rejected by the schema."""
     await _setup_integration(hass, mock_aula_client)
 
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         await hass.services.async_call(
             DOMAIN,
             SERVICE_GET_THREAD_MESSAGES,
