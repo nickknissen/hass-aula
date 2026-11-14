@@ -6,7 +6,10 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
+try:
+    import probatio as vol
+except ImportError:  # Home Assistant before 2026.9
+    import voluptuous as vol  # type: ignore[no-redef]
 from aula import ActivityType, AulaAuthenticationError, HttpRequestError
 from aula.api_client import ThreadScanLimitError
 from homeassistant.config_entries import ConfigEntryState
@@ -50,7 +53,7 @@ if TYPE_CHECKING:
 
     from aula import AulaApiClient
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
-    from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.device_registry import AnyDeviceEntry
 
     from .data import AulaConfigEntry
 
@@ -109,7 +112,7 @@ class _PresenceUpdate:
 
 
 @callback
-def _child_id_from_device(device: DeviceEntry) -> int | None:
+def _child_id_from_device(device: AnyDeviceEntry) -> int | None:
     """
     Return the child's institution profile ID for an Aula child device.
 
@@ -158,7 +161,7 @@ def _async_resolve_device_ids(hass: HomeAssistant, call: ServiceCall) -> set[str
 
 @callback
 def _async_entry_for_device(
-    hass: HomeAssistant, device: DeviceEntry
+    hass: HomeAssistant, device: AnyDeviceEntry
 ) -> AulaConfigEntry:
     """Return the loaded Aula config entry that owns a device."""
     for entry_id in device.config_entries:

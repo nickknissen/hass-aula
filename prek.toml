@@ -41,5 +41,6 @@ hooks = [
 repo = "local"
 hooks = [
     { id = "check-translations", name = "check-translations", language = "system", entry = "uv run --no-project scripts/check_translations", pass_filenames = false, always_run = true },
+    { id = "mypy", name = "mypy", language = "system", entry = "uv run mypy custom_components/hass_aula", pass_filenames = false, types = ["python"] },
     { id = "pytest", name = "pytest", language = "system", entry = "uv run pytest", pass_filenames = false, always_run = true },
 ]

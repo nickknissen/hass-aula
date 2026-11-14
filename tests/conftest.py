@@ -90,6 +90,7 @@ def mock_child(
     child.id = child_id
     child.name = name
     child.institution_name = institution_name
+    child.institution_code = f"inst_{child_id}"
     child.profile_id = profile_id
     child.profile_picture = ""
     child._raw = {
