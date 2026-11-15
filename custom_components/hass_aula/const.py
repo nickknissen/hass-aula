@@ -100,6 +100,8 @@ REPEAT_PATTERNS: dict[str, str] = {
 }
 
 PRESENCE_POLL_INTERVAL = 300  # 5 minutes
+# Two weeks, so the next planned day is still in reach across a week's school break.
+PRESENCE_PLAN_DAYS = 14
 NOTIFICATIONS_POLL_INTERVAL = 300  # 5 minutes
 CALENDAR_POLL_INTERVAL = 3600  # 60 minutes
 MESSAGES_POLL_INTERVAL = 1800  # 30 minutes

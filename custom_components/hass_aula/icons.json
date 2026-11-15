@@ -35,6 +35,9 @@
     "calendar": {
       "school_calendar": {
         "default": "mdi:calendar-school"
+      },
+      "presence_plan": {
+        "default": "mdi:calendar-account"
       }
     }
   },

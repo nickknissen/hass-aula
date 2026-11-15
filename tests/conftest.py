@@ -16,6 +16,7 @@ from aula.models import (
     MUTask,
 )
 from aula.models.child import Child
+from aula.models.institution_profile import InstitutionProfile
 from aula.models.library import LibraryStatus
 from aula.models.meebook_weekplan import MeebookDayPlan, MeebookStudentPlan, MeebookTask
 from aula.models.message import Message
@@ -30,6 +31,11 @@ from aula.models.mu_weekly_letter import (
 from aula.models.notification import Notification
 from aula.models.presence import ActivityType, PresenceState
 from aula.models.presence_location import PresenceLocation
+from aula.models.presence_template import (
+    DayTemplate,
+    PresenceWeekTemplate,
+    SpareTimeActivity,
+)
 from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.hass_aula.const import (
@@ -158,6 +164,30 @@ def mock_daily_overview(
     return overview
 
 
+def mock_day_template(
+    by_date: str = "2024-01-15",
+    activity_type: ActivityType = ActivityType.PICKED_UP_BY,
+    entry_time: str | None = "08:00:00",
+    exit_time: str | None = "15:30:00",
+    **fields: Any,
+) -> DayTemplate:
+    """Create one planned day as aula parses it from presence.getPresenceTemplates."""
+    return DayTemplate(
+        by_date=by_date,
+        activity_type=activity_type.value,
+        entry_time=entry_time,
+        exit_time=exit_time,
+        **fields,
+    )
+
+
+def mock_presence_week(child_id: int, days: list[DayTemplate]) -> PresenceWeekTemplate:
+    """Create the week template that holds one child's planned days."""
+    return PresenceWeekTemplate(
+        institution_profile=InstitutionProfile(id=child_id), day_templates=days
+    )
+
+
 def mock_presence_templates(
     child_id: int = 1,
     by_date: str = "2024-01-15",
@@ -166,34 +196,20 @@ def mock_presence_templates(
     self_decider_end: str | None = None,
     spare_time_start: str | None = None,
     spare_time_end: str | None = None,
-) -> list[MagicMock]:
-    """Create a mock PresenceWeekTemplate list with one day template."""
-    from aula.models.presence_template import (
-        DayTemplate,
-        PresenceWeekTemplate,
-        SpareTimeActivity,
-    )
-
+) -> list[PresenceWeekTemplate]:
+    """Create a presence template response with one planned day."""
     sta = None
     if spare_time_start or spare_time_end:
-        sta = MagicMock(spec=SpareTimeActivity)
-        sta.start_time = spare_time_start
-        sta.end_time = spare_time_end
+        sta = SpareTimeActivity(start_time=spare_time_start, end_time=spare_time_end)
 
-    day = MagicMock(spec=DayTemplate)
-    day.by_date = by_date
-    day.activity_type = activity_type.value
-    day.self_decider_start_time = self_decider_start
-    day.self_decider_end_time = self_decider_end
-    day.spare_time_activity = sta
-
-    ip = MagicMock()
-    ip.id = child_id
-
-    tmpl = MagicMock(spec=PresenceWeekTemplate)
-    tmpl.institution_profile = ip
-    tmpl.day_templates = [day]
-    return [tmpl]
+    day = mock_day_template(
+        by_date=by_date,
+        activity_type=activity_type,
+        self_decider_start_time=self_decider_start,
+        self_decider_end_time=self_decider_end,
+        spare_time_activity=sta,
+    )
+    return [mock_presence_week(child_id, [day])]
 
 
 def mock_calendar_event(

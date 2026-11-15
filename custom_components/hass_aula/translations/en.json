@@ -138,6 +138,9 @@
     "calendar": {
       "school_calendar": {
         "name": "School calendar"
+      },
+      "presence_plan": {
+        "name": "Presence plan"
       }
     }
   },
