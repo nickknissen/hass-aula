@@ -47,6 +47,12 @@
     },
     "mark_thread_read": {
       "service": "mdi:email-open-outline"
+    },
+    "download_attachment": {
+      "service": "mdi:paperclip"
+    },
+    "clear_attachments": {
+      "service": "mdi:paperclip-off"
     }
   }
 }

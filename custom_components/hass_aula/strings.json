@@ -180,6 +180,24 @@
     },
     "thread_not_in_own_mailbox": {
       "message": "Thread {thread_id} is not in your own mailbox, for example because it is in a shared inbox, so it cannot be marked as read."
+    },
+    "attachment_not_found": {
+      "message": "Attachment {attachment_id} is not in the newest messages of thread {thread_id}. Take the ID from the Get thread messages action."
+    },
+    "attachment_not_downloadable": {
+      "message": "The attachment \"{name}\" cannot be downloaded. Only files and images stored in Aula can be downloaded. Links to a cloud drive and secure documents cannot."
+    },
+    "attachment_too_large": {
+      "message": "The attachment \"{name}\" is larger than {max_mb} MB, so it was not downloaded."
+    },
+    "attachment_download_failed": {
+      "message": "Downloading the attachment \"{name}\" failed with HTTP status {status}."
+    },
+    "attachment_save_failed": {
+      "message": "The attachment could not be saved to {path}: {error}"
+    },
+    "no_media_folder": {
+      "message": "Home Assistant has no media folder, which is where attachments are saved. Set up a media folder (media_dirs) and try again."
     }
   },
   "services": {
@@ -254,6 +272,34 @@
         "config_entry_id": {
           "name": "Account",
           "description": "Which Aula account the thread belongs to. Only needed when more than one is configured."
+        }
+      }
+    },
+    "download_attachment": {
+      "name": "Download attachment",
+      "description": "Saves a message attachment in the aula folder of your media folder, so an automation can pass it on, for example to ai_task.generate_data. Only files and images stored in Aula can be downloaded, up to 25 MB.",
+      "fields": {
+        "thread_id": {
+          "name": "Thread ID",
+          "description": "The thread the attachment is in."
+        },
+        "attachment_id": {
+          "name": "Attachment ID",
+          "description": "The attachment to download, as listed by the Get thread messages action. It must be in one of the 5 newest messages in the thread."
+        },
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Which Aula account the thread belongs to. Only needed when more than one is configured."
+        }
+      }
+    },
+    "clear_attachments": {
+      "name": "Clear attachments",
+      "description": "Deletes the attachments that Download attachment saved in the aula folder of your media folder. Other media is left alone.",
+      "fields": {
+        "days": {
+          "name": "Older than (days)",
+          "description": "Only delete attachments saved more than this many days ago. Leave empty to delete all of them."
         }
       }
     }

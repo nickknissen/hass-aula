@@ -380,6 +380,67 @@ sequence:
       thread_id: "{{ thread_id }}"
 ```
 
+### `hass_aula.download_attachment`
+
+Saves a message attachment in an `aula` folder in your media folder (`/media/aula/` on a default install) and returns where it landed. From there you can pass it to `ai_task.generate_data`, for example to let an AI read a spelling list or the plan for a theme day.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `thread_id` | yes | Thread the attachment is in |
+| `attachment_id` | yes | The attachment's `id` from [`hass_aula.get_thread_messages`](#hass_aulaget_thread_messages). It must be in one of the 5 newest messages in the thread |
+| `config_entry_id` | no | Which Aula account the thread belongs to. Only needed if you have more than one configured |
+
+Only files and images stored in Aula can be downloaded (`type` is `file` or `media`), up to 25 MB. A link to a cloud drive or a secure document fails with an error. The action looks the attachment up again itself, so it does not depend on the `url` from an earlier `get_thread_messages` call still working.
+
+The file is named after the attachment's ID and its cleaned-up name: `Ugeplan uge 47.pdf` with ID 123 becomes `123_ugeplan_uge_47.pdf`. Downloading the same attachment again replaces the file.
+
+The action can return a response:
+
+| Key | Description |
+|-----|-------------|
+| `path` | Where the file was saved |
+| `media_content_id` | The file's media source ID, ready for an action that takes media |
+| `content_type` | The file type guessed from its extension, such as `application/pdf`, or `null` if it is unknown |
+
+```yaml
+sequence:
+  - action: hass_aula.get_thread_messages
+    data:
+      thread_id: "{{ thread_id }}"
+    response_variable: thread
+  - action: hass_aula.download_attachment
+    data:
+      thread_id: "{{ thread_id }}"
+      attachment_id: "{{ thread.messages[0].attachments[0].id }}"
+    response_variable: file
+  - action: ai_task.generate_data
+    data:
+      task_name: School days
+      instructions: List the special school days in this file.
+      attachments:
+        - media_content_id: "{{ file.media_content_id }}"
+          media_content_type: "{{ file.content_type }}"
+    response_variable: result
+```
+
+The AI providers in Home Assistant read images and PDFs. Other files, such as a DOCX, still download, but `ai_task.generate_data` refuses them.
+
+The media browser only lists images, video and audio, so saved PDFs do not show up there. Use `hass_aula.clear_attachments` to delete them.
+
+### `hass_aula.clear_attachments`
+
+Deletes the files that `hass_aula.download_attachment` saved. Other files in your media folder are left alone. Only administrators can use this action.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `days` | no | Only delete files saved more than this many days ago, from 1 to 3650. Leave it out to delete all of them |
+
+```yaml
+action: hass_aula.clear_attachments
+data:
+  days: 30
+```
+
 ---
 
 ## Events
