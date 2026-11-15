@@ -159,6 +159,31 @@ async def test_presence_sensor_attributes(
     json.dumps(dict(state.attributes), cls=JSONEncoder)
 
 
+async def test_presence_sensor_leaves_placeholder_times_empty(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """Times Aula only fills in because nothing is planned are not shown as a plan."""
+    mock_aula_client.get_daily_overview = AsyncMock(
+        return_value=mock_daily_overview(
+            entry_time=datetime(2024, 1, 15, 6, 30, tzinfo=UTC),
+            exit_time=datetime(2024, 1, 15, 23, 59, tzinfo=UTC),
+            is_default_entry_time=True,
+            is_default_exit_time=True,
+        )
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_child_presence_status")
+    assert state is not None
+    assert state.attributes["entry_time"] is None
+    assert state.attributes["exit_time"] is None
+
+
 async def test_presence_sensor_spare_time_activity_is_not_a_self_decider_window(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,

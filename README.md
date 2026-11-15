@@ -104,8 +104,8 @@ The following entities are created **per child**:
 |-----------|-------------|
 | `check_in_time` | Time the child checked in |
 | `check_out_time` | Time the child checked out |
-| `entry_time` | Time the child entered the building |
-| `exit_time` | Time the child exited the building |
+| `entry_time` | Today's planned drop-off time. Empty when none is planned |
+| `exit_time` | Today's planned pick-up time. Empty when none is planned |
 | `exit_with` | Name of the person who collected the child, as Aula records it |
 | `self_decider_start_time` | Start of today's self-decider window, from today's presence template. Empty on a day that is not a self-decider day |
 | `self_decider_end_time` | End of that window |

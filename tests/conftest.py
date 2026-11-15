@@ -125,6 +125,9 @@ def mock_daily_overview(
     exit_with: str | None = None,
     location: str | None = None,
     sleep_intervals: list[dict[str, Any]] | None = None,
+    *,
+    is_default_entry_time: bool = False,
+    is_default_exit_time: bool = False,
 ) -> MagicMock:
     """
     Create a mock DailyOverview object.
@@ -147,6 +150,8 @@ def mock_daily_overview(
     overview.check_out_time = check_out_time
     overview.entry_time = entry_time
     overview.exit_time = exit_time
+    overview.is_default_entry_time = is_default_entry_time
+    overview.is_default_exit_time = is_default_exit_time
     overview.exit_with = exit_with
     overview.location = PresenceLocation(name=location) if location else None
     overview.sleep_intervals = sleep_intervals if sleep_intervals is not None else []
