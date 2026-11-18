@@ -15,7 +15,7 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 
 - **Presence tracking** — Know whether your child is present, sick, absent, on a field trip, or checked out, with check-in/out times, entry/exit times, location, and registered naps as attributes
 - **School calendar** — Upcoming events including teacher, substitute, and location info
-- **Presence plan** calendar with each child's planned drop-off and pick-up for the coming days, and who collects them
+- **Presence plan** calendar with each child's planned drop-off and pick-up for the coming days, and who picks them up
 - **Notifications** — Fires a Home Assistant event for each new Aula notification, enabling automations to push alerts to your phone
 - **Set pick-up times** — The `hass_aula.update_presence` action writes planned drop-off/pick-up times back to Aula for one or more children at once
 - **Multi-child support** — Each child gets their own device with a full set of entities
@@ -107,7 +107,7 @@ The following entities are created **per child**:
 | `check_out_time` | Time the child checked out |
 | `entry_time` | Today's planned drop-off time. Empty when none is planned |
 | `exit_time` | Today's planned pick-up time. Empty when none is planned |
-| `exit_with` | Name of the person who collected the child, as Aula records it |
+| `exit_with` | Name of the person who picked up the child, as Aula records it |
 | `self_decider_start_time` | Start of today's self-decider window, from today's presence template. Empty on a day that is not a self-decider day |
 | `self_decider_end_time` | End of that window |
 | `location` | Current reported location |
@@ -234,7 +234,7 @@ teacher named in the event description.
 
 A booked parent meeting shows at the time slot you booked for that child. In Aula's own calendar data a meeting spans the whole period parents can book in, often several days. A meeting you have not booked yet still shows that whole period.
 
-**Presence plan:** each planned day is one event, from drop-off to pick-up. The title says how the child gets home, for example `Collected by Jane Doe (Mor)`, in Home Assistant's language. A self-decider day ends at the end of its window, and the title shows the window. The day's comment is the event description.
+**Presence plan:** each planned day is one event, from drop-off to pick-up. The title says how the child gets home, for example `Picked up by Jane Doe (Mor)`, in Home Assistant's language. A self-decider day ends at the end of its window, and the title shows the window. The day's comment is the event description.
 
 - A day with only one planned time is an all-day event.
 - Days without a plan, and vacation days, have no event.
@@ -253,11 +253,11 @@ Target one or more **child devices** (or any entity belonging to them). Every ta
 | Field | Required | Description |
 |-------|----------|-------------|
 | `entry_time` | yes | Time the child is dropped off, e.g. `08:00` |
-| `exit_time` | yes | Time the child is collected or allowed to leave, e.g. `15:30`. With `self_decider`, the earliest time the child may leave |
+| `exit_time` | yes | Time the child is picked up or allowed to leave, e.g. `15:30`. With `self_decider`, the earliest time the child may leave |
 | `date` | no | Day to update. Defaults to today |
 | `activity_type` | no | `picked_up_by` (default), `self_decider`, `send_home`, `go_home_with`, `drop_off_time` |
 | `self_decider_end_time` | no | Only with `self_decider`: the latest time the child may leave, so they may go any time from `exit_time` until then, as in Aula. Defaults to `exit_time` |
-| `exit_with` | conditional | Who collects the child. **Required** for `picked_up_by` and `go_home_with`. Include the relation exactly as Aula shows it, e.g. `"Nick Nissen (Far)"` |
+| `exit_with` | conditional | Who picks up the child. **Required** for `picked_up_by` and `go_home_with`. Include the relation exactly as Aula shows it, e.g. `"Nick Nissen (Far)"` |
 | `comment` | no | Note for the staff |
 | `repeat` | no | `never` (default), `weekly`, `every_2_weeks` |
 | `expires_at` | no | When a repeating entry stops. Defaults to the end of the school year |

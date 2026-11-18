@@ -366,7 +366,7 @@ async def test_presence_plan_shows_each_planned_day(
         (e["summary"], e["start"], e["end"], e.get("description")) for e in events
     ] == [
         (
-            "Collected by Værge Et (Far)",
+            "Picked up by Værge Et (Far)",
             datetime(2024, 1, 15, 8, 0, tzinfo=tz).isoformat(),
             datetime(2024, 1, 15, 15, 30, tzinfo=tz).isoformat(),
             "Har gymnastiktøj med",
@@ -433,7 +433,7 @@ async def test_presence_plan_is_on_while_the_child_is_planned_in(
     assert state is not None
     assert (state.state, state.attributes["message"]) == (
         "on",
-        "Collected by Værge Et (Far)",
+        "Picked up by Værge Et (Far)",
     )
 
 
