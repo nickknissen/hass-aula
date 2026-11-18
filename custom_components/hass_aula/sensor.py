@@ -183,8 +183,10 @@ class AulaPresenceSensor(AulaEntity[AulaPresenceCoordinator], SensorEntity):
         return {
             "check_in_time": overview.check_in_time,
             "check_out_time": overview.check_out_time,
-            "entry_time": overview.entry_time,
-            "exit_time": overview.exit_time,
+            "entry_time": None
+            if overview.is_default_entry_time
+            else overview.entry_time,
+            "exit_time": None if overview.is_default_exit_time else overview.exit_time,
             "exit_with": overview.exit_with,
             "self_decider_start_time": child_data.self_decider_start,
             "self_decider_end_time": child_data.self_decider_end,

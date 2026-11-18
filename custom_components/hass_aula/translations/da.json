@@ -138,6 +138,9 @@
     "calendar": {
       "school_calendar": {
         "name": "Skolekalender"
+      },
+      "presence_plan": {
+        "name": "Komme/gå-plan"
       }
     }
   },

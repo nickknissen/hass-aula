@@ -15,6 +15,7 @@ A Home Assistant integration for [Aula](https://www.aula.dk) — the Danish scho
 
 - **Presence tracking** — Know whether your child is present, sick, absent, on a field trip, or checked out, with check-in/out times, entry/exit times, location, and registered naps as attributes
 - **School calendar** — Upcoming events including teacher, substitute, and location info
+- **Presence plan** calendar with each child's planned drop-off and pick-up for the coming days, and who collects them
 - **Notifications** — Fires a Home Assistant event for each new Aula notification, enabling automations to push alerts to your phone
 - **Set pick-up times** — The `hass_aula.update_presence` action writes planned drop-off/pick-up times back to Aula for one or more children at once
 - **Multi-child support** — Each child gets their own device with a full set of entities
@@ -104,8 +105,8 @@ The following entities are created **per child**:
 |-----------|-------------|
 | `check_in_time` | Time the child checked in |
 | `check_out_time` | Time the child checked out |
-| `entry_time` | Time the child entered the building |
-| `exit_time` | Time the child exited the building |
+| `entry_time` | Today's planned drop-off time. Empty when none is planned |
+| `exit_time` | Today's planned pick-up time. Empty when none is planned |
 | `exit_with` | Name of the person who collected the child, as Aula records it |
 | `self_decider_start_time` | Start of today's self-decider window, from today's presence template. Empty on a day that is not a self-decider day |
 | `self_decider_end_time` | End of that window |
@@ -225,12 +226,19 @@ preserved rather than being flattened to the top of the week:
 | Entity | Description |
 |--------|-------------|
 | `calendar.<child>_school` | Upcoming school events including teachers, substitutes, and location |
+| `calendar.<child>_presence_plan` | Planned drop-off and pick-up for each day, from Aula's Komme/gå plan |
 
 Aula returns a separate row for every adult attached to a lesson. These are
 merged into a single event, so a co-taught lesson appears once, with every
 teacher named in the event description.
 
 A booked parent meeting shows at the time slot you booked for that child. In Aula's own calendar data a meeting spans the whole period parents can book in, often several days. A meeting you have not booked yet still shows that whole period.
+
+**Presence plan:** each planned day is one event, from drop-off to pick-up. The title says how the child gets home, for example `Collected by Jane Doe (Mor)`, in Home Assistant's language. A self-decider day ends at the end of its window, and the title shows the window. The day's comment is the event description.
+
+- A day with only one planned time is an all-day event.
+- Days without a plan, and vacation days, have no event.
+- The calendar is on while the child is planned to be at the institution.
 
 ---
 

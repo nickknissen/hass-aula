@@ -49,6 +49,7 @@ from .conftest import (
     mock_calendar_event,
     mock_child,
     mock_daily_overview,
+    mock_day_template,
     mock_easyiq_homework,
     mock_library_loan,
     mock_library_status,
@@ -59,6 +60,7 @@ from .conftest import (
     mock_mu_task,
     mock_mu_weekly_letter,
     mock_mu_weekly_person,
+    mock_presence_week,
     mock_profile,
     mock_team_reminder,
     mock_user_reminders,
@@ -110,6 +112,36 @@ async def test_presence_coordinator_fetch(hass: HomeAssistant) -> None:
     assert data[1].self_decider_start is None
     assert data[1].self_decider_end is None
     client.get_daily_overview.assert_called_once_with(1)
+
+
+async def test_presence_coordinator_keeps_two_weeks_of_planned_days(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One request reads each child's plan for today and the next two weeks."""
+    freezer.move_to("2024-01-15 12:00:00+00:00")
+    monday = mock_day_template("2024-01-15")
+    tuesday = mock_day_template("2024-01-16")
+    client = AsyncMock()
+    client.get_daily_overview = AsyncMock(return_value=mock_daily_overview())
+    client.get_presence_templates = AsyncMock(
+        return_value=[
+            mock_presence_week(1, [monday]),
+            mock_presence_week(1, [tuesday]),
+        ]
+    )
+    coordinator = AulaPresenceCoordinator(
+        hass, client, mock_profile(), _create_token_manager()
+    )
+    coordinator.config_entry = _create_config_entry()
+
+    data = await coordinator._async_update_data()
+
+    assert data[1].planned_days == [monday, tuesday]
+    client.get_presence_templates.assert_awaited_once_with(
+        institution_profile_ids=[1],
+        from_date=date(2024, 1, 15),
+        to_date=date(2024, 1, 29),
+    )
 
 
 async def test_presence_coordinator_auth_error(hass: HomeAssistant) -> None:

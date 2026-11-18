@@ -39,6 +39,7 @@ from .const import (
     MU_TASKS_POLL_INTERVAL,
     MU_UGEPLAN_POLL_INTERVAL,
     NOTIFICATIONS_POLL_INTERVAL,
+    PRESENCE_PLAN_DAYS,
     PRESENCE_POLL_INTERVAL,
     TRANSIENT_FAILURE_TOLERANCE,
 )
@@ -58,7 +59,7 @@ if TYPE_CHECKING:
     from aula import AulaApiClient, Child, Profile
     from aula.models.meebook_weekplan import MeebookTask
     from aula.models.mu_weekly_letter import MUWeeklyLetter
-    from aula.models.presence_template import PresenceWeekTemplate
+    from aula.models.presence_template import DayTemplate, PresenceWeekTemplate
     from homeassistant.core import HomeAssistant
 
     from .data import AulaConfigEntry
@@ -167,19 +168,21 @@ def _get_child_widget_id(child: Child) -> str:
 
 
 class _PresenceChildData:
-    """Presence data for a single child (overview + today's template)."""
+    """Presence data for a single child: today's overview and the days planned ahead."""
 
-    __slots__ = ("overview", "self_decider_end", "self_decider_start")
+    __slots__ = ("overview", "planned_days", "self_decider_end", "self_decider_start")
 
     def __init__(
         self,
         overview: DailyOverview | None,
-        self_decider_start: str | None = None,
-        self_decider_end: str | None = None,
+        planned_days: list[DayTemplate],
+        today: date,
     ) -> None:
         self.overview = overview
-        self.self_decider_start = self_decider_start
-        self.self_decider_end = self_decider_end
+        self.planned_days = planned_days
+        self.self_decider_start, self.self_decider_end = _self_decider_window(
+            planned_days, today
+        )
 
 
 class AulaPresenceCoordinator(
@@ -210,7 +213,7 @@ class AulaPresenceCoordinator(
 
     @_tolerate_transient_failures
     async def _async_update_data(self) -> dict[int, _PresenceChildData]:
-        """Fetch presence data and today's templates for all children."""
+        """Fetch today's presence and the days planned ahead for all children."""
         child_ids = [child.id for child in self.profile.children]
         today = dt_util.now().date()
 
@@ -222,17 +225,17 @@ class AulaPresenceCoordinator(
                 self.client.get_presence_templates(
                     institution_profile_ids=child_ids,
                     from_date=today,
-                    to_date=today,
+                    to_date=today + timedelta(days=PRESENCE_PLAN_DAYS),
                 ),
             )
 
-        self_decider_map = _extract_self_decider_times(templates, today)
+        days_by_child = day_templates_by_child(templates)
 
         return {
             child.id: _PresenceChildData(
                 overview=overview,
-                self_decider_start=self_decider_map.get(child.id, (None, None))[0],
-                self_decider_end=self_decider_map.get(child.id, (None, None))[1],
+                planned_days=days_by_child.get(child.id, []),
+                today=today,
             )
             for child, overview in zip(
                 self.profile.children, overview_results, strict=False
@@ -240,24 +243,30 @@ class AulaPresenceCoordinator(
         }
 
 
-def _extract_self_decider_times(
+def day_templates_by_child(
     templates: list[PresenceWeekTemplate],
-    today: date,
-) -> dict[int, tuple[str | None, str | None]]:
-    """Extract self-decider start/end times from today's templates."""
-    result: dict[int, tuple[str | None, str | None]] = {}
-    today_iso = today.isoformat()
+) -> dict[int, list[DayTemplate]]:
+    """Group the planned days by the child they belong to."""
+    result: dict[int, list[DayTemplate]] = {}
     for week_tmpl in templates:
         ip = week_tmpl.institution_profile
-        if not ip or ip.id is None:
-            continue
-        for day in week_tmpl.day_templates:
-            if (
-                day.by_date == today_iso
-                and day.activity_type == ActivityType.SELF_DECIDER.value
-            ):
-                result[ip.id] = (day.self_decider_start_time, day.self_decider_end_time)
+        if ip and ip.id is not None:
+            result.setdefault(ip.id, []).extend(week_tmpl.day_templates)
     return result
+
+
+def _self_decider_window(
+    days: list[DayTemplate], today: date
+) -> tuple[str | None, str | None]:
+    """Return today's self-decider window, or no window on another kind of day."""
+    today_iso = today.isoformat()
+    for day in days:
+        if (
+            day.by_date == today_iso
+            and day.activity_type == ActivityType.SELF_DECIDER.value
+        ):
+            return day.self_decider_start_time, day.self_decider_end_time
+    return None, None
 
 
 class AulaCalendarCoordinator(
