@@ -80,6 +80,11 @@ def _planned_time(value: str | None, *, is_placeholder: bool) -> time | None:
     return dt_util.parse_time(value)
 
 
+def _start_of_this_week() -> date:
+    today = dt_util.now().date()
+    return today - timedelta(days=today.weekday())
+
+
 def _plan_event(
     day: DayTemplate, activity_labels: Mapping[ActivityType, str]
 ) -> CalendarEvent | None:
@@ -243,10 +248,14 @@ class AulaPresencePlanCalendar(AulaEntity[AulaPresenceCoordinator], CalendarEnti
         end_date: datetime,
     ) -> list[CalendarEvent]:
         """Return the planned days within a date range."""
+        # Aula refuses the whole request when it reaches back before this week.
+        from_date = max(start_date.date(), _start_of_this_week())
+        if end_date.date() < from_date:
+            return []
         try:
             templates = await self.coordinator.client.get_presence_templates(
                 institution_profile_ids=[self._child.id],
-                from_date=start_date.date(),
+                from_date=from_date,
                 to_date=end_date.date(),
             )
         except HttpRequestError:

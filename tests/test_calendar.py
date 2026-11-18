@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock
 
-from aula import ActivityType, HttpRequestError
+from aula import ActivityType, AulaRejectedError, HttpRequestError
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -316,8 +316,10 @@ async def _get_presence_plan(
 async def test_presence_plan_shows_each_planned_day(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """A planned day runs from drop-off to pick-up, titled with how the child leaves."""
+    freezer.move_to(datetime(2024, 1, 15, 7, 0, tzinfo=dt_util.get_default_time_zone()))
     await _setup(hass)
     week = [
         mock_day_template(
@@ -387,8 +389,10 @@ async def test_presence_plan_shows_each_planned_day(
 async def test_presence_plan_titles_follow_the_home_assistant_language(
     hass: HomeAssistant,
     mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Titles use the activity names the update_presence action shows."""
+    freezer.move_to(datetime(2024, 1, 15, 7, 0, tzinfo=dt_util.get_default_time_zone()))
     hass.config.language = "da"
     mock_aula_client.get_presence_templates = AsyncMock(
         return_value=[
@@ -445,3 +449,56 @@ async def test_presence_plan_get_events_api_error(
     start = dt_util.now()
 
     assert await _get_presence_plan(hass, start, start + timedelta(days=7)) == []
+
+
+def _aula_refusing_weeks_before(monday: date, week: list[Any]) -> AsyncMock:
+    """Answer like Aula: the plan from this week on, a refusal for earlier weeks."""
+
+    async def get_presence_templates(**kwargs: Any) -> list[Any]:
+        if kwargs["from_date"] < monday:
+            msg = "Aula rejected presence.getPresenceTemplates (status code 10)"
+            raise AulaRejectedError(msg, 400, code=10)
+        return [mock_presence_week(1, week)]
+
+    return AsyncMock(side_effect=get_presence_templates)
+
+
+async def test_presence_plan_month_view_shows_this_weeks_plan(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A month view that starts weeks back still shows the plan from this week on."""
+    tz = dt_util.get_default_time_zone()
+    freezer.move_to(datetime(2024, 1, 17, 10, 0, tzinfo=tz))
+    await _setup(hass)
+    mock_aula_client.get_presence_templates = _aula_refusing_weeks_before(
+        date(2024, 1, 15), [mock_day_template("2024-01-17", exit_with="Værge Et (Far)")]
+    )
+
+    events = await _get_presence_plan(
+        hass, datetime(2024, 1, 1, tzinfo=tz), datetime(2024, 2, 5, tzinfo=tz)
+    )
+
+    assert [e["start"][:10] for e in events] == ["2024-01-17"]
+
+
+async def test_presence_plan_does_not_ask_aula_for_past_weeks(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A range that ends before this week is empty without a request Aula refuses."""
+    tz = dt_util.get_default_time_zone()
+    freezer.move_to(datetime(2024, 1, 17, 10, 0, tzinfo=tz))
+    await _setup(hass)
+    mock_aula_client.get_presence_templates = _aula_refusing_weeks_before(
+        date(2024, 1, 15), []
+    )
+
+    events = await _get_presence_plan(
+        hass, datetime(2024, 1, 1, tzinfo=tz), datetime(2024, 1, 8, tzinfo=tz)
+    )
+
+    assert events == []
+    mock_aula_client.get_presence_templates.assert_not_awaited()
