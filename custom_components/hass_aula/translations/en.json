@@ -158,7 +158,7 @@
       "message": "The Aula account \"{target}\" is not loaded. Reload the integration and try again."
     },
     "exit_with_required": {
-      "message": "The activity type \"{activity_type}\" requires exit_with to name the person collecting the child."
+      "message": "The activity type \"{activity_type}\" requires exit_with to name the person picking up the child."
     },
     "invalid_target": {
       "message": "\"{target}\" is not an Aula child. Target the device for the child you want to update."
@@ -214,7 +214,7 @@
         },
         "exit_time": {
           "name": "Exit time",
-          "description": "Time the child is collected or allowed to leave. With \"Allowed to leave alone\", the earliest time the child may leave."
+          "description": "Time the child is picked up or allowed to leave. With \"Allowed to leave alone\", the earliest time the child may leave."
         },
         "date": {
           "name": "Date",
@@ -229,8 +229,8 @@
           "description": "With \"Allowed to leave alone\": the latest time the child may leave, so the child may leave between the exit time and this time. Leave empty to use the exit time."
         },
         "exit_with": {
-          "name": "Collected by",
-          "description": "Name of the person collecting the child, including the relation in parentheses as Aula shows it, for example \"Nick Nissen (Far)\". Required for \"Collected by\" and \"Goes home with\"."
+          "name": "Picked up by",
+          "description": "Name of the person picking up the child, including the relation in parentheses as Aula shows it, for example \"Nick Nissen (Far)\". Required for \"Picked up by\" and \"Goes home with\"."
         },
         "comment": {
           "name": "Comment",
@@ -316,7 +316,7 @@
     },
     "activity_type": {
       "options": {
-        "picked_up_by": "Collected by",
+        "picked_up_by": "Picked up by",
         "self_decider": "Allowed to leave alone",
         "send_home": "Sent home",
         "go_home_with": "Goes home with",
