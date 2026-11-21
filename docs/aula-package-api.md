@@ -586,6 +586,7 @@ sender field.
 class MessageThread(AulaDataClass):
     thread_id: str
     subject: str
+    web_url: str | None   # set in __post_init__ (1.23.0); None without a thread_id
 ```
 
 ### MessageFolder
@@ -626,6 +627,7 @@ class Notification(AulaDataClass):
     album_id: int | None = None
     media_id: int | None = None
     institution_profile_id: int | None = None
+    web_url: str | None   # set in __post_init__ (1.23.0); None without a post_id
 ```
 
 ### NotificationSetting
@@ -663,6 +665,7 @@ class Post(AulaDataClass):
     can_current_user_delete: bool
     can_current_user_comment: bool
     edited_at: datetime | None = None
+    web_url: str          # set in __post_init__ (1.23.0)
     # Properties:
     # content: str          — plain text stripped from HTML
     # content_markdown: str — HTML converted to Markdown
@@ -1375,7 +1378,8 @@ fine, so treat the widget as unavailable instead of rebuilding the session or as
 reauth. A provider's 410 raises `HttpRequestError` and no longer bumps the Aula API version.
 
 **Token server outages (1.20.0):** when the automatic refresh behind a 401 finds the token
-server down, the request raises `AulaServerError` (5xx) or `AulaConnectionError` (unreachable).
+server down, the request raises `AulaServerError` (5xx, or since 1.23.0 a maintenance redirect)
+or `AulaConnectionError` (unreachable).
 Before 1.20.0 the refresh quietly failed and the request raised `AulaAuthenticationError`.
 
 **Error envelopes (1.13.0):** when an Aula API response is 2xx but its body
@@ -1401,8 +1405,9 @@ MitIDAuthError                   — Base for MitID auth failures
 ```
 
 `MitIDAuthClient.refresh_access_token` raises `OAuthError` when the token server rejects the
-refresh token, and `NetworkError` when it is unreachable or, since 1.20.0, answers with a 5xx.
-Before 1.20.0 a 5xx was an `OAuthError`.
+refresh token, and `NetworkError` when it is unreachable, answers with a 5xx (since 1.20.0) or
+redirects, as it does during Aula maintenance (since 1.23.0). Before that, a 5xx or a redirect
+was an `OAuthError`.
 
 `SecurityCheckError` is **new in 1.10.0**: the login was diverted to
 `security-check.stil.dk`, which needs JavaScript and so cannot be answered by
@@ -1693,9 +1698,8 @@ class MitIDAuthClient:
 
 `refresh_access_token` keeps the old `refresh_token` in the returned dict when
 the token endpoint does not rotate it (1.13.0). It raises `OAuthError` when the
-refresh token is rejected and `NetworkError` when the token server is unreachable
-or answers with a 5xx (the 5xx case since 1.20.0). A redirect is still an
-`OAuthError`.
+refresh token is rejected and `NetworkError` when the token server is unreachable,
+answers with a 5xx (since 1.20.0) or redirects (since 1.23.0).
 
 ### TerminalQRDisplay
 
