@@ -244,6 +244,8 @@ A booked parent meeting shows at the time slot you booked for that child. In Aul
 
 ## Actions
 
+All actions act on your Aula account, so only administrators can call them from a dashboard or the app. Automations and scripts can still use them.
+
 ### `hass_aula.update_presence`
 
 Sets the planned drop-off and pick-up times for one or more children — the same thing you would otherwise do by hand under **Komme/gå** in Aula.

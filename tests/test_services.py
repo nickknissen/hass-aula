@@ -1525,3 +1525,66 @@ async def test_clear_attachments_is_admin_only(
         )
 
     assert (tmp_path / "aula" / "123_plan.pdf").exists()
+
+
+@pytest.mark.parametrize(
+    ("service", "data", "return_response", "client_method"),
+    [
+        (
+            SERVICE_UPDATE_PRESENCE,
+            {
+                ATTR_ENTITY_ID: ["sensor.test_child_presence_status"],
+                "entry_time": "08:00:00",
+                "exit_time": "15:30:00",
+                "exit_with": "Far",
+            },
+            False,
+            "update_presence_template",
+        ),
+        (
+            SERVICE_GET_THREAD_MESSAGES,
+            {"thread_id": "12345"},
+            True,
+            "get_messages_for_thread",
+        ),
+        (
+            SERVICE_MARK_THREAD_READ,
+            {"thread_id": "12345"},
+            False,
+            "mark_thread_read",
+        ),
+        (
+            SERVICE_DOWNLOAD_ATTACHMENT,
+            {"thread_id": "12345", "attachment_id": 123},
+            False,
+            "get_messages_for_thread",
+        ),
+    ],
+)
+async def test_account_actions_are_admin_only(
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+    hass_read_only_user: MockUser,
+    tmp_path: Path,
+    *,
+    service: str,
+    data: dict[str, Any],
+    return_response: bool,
+    client_method: str,
+) -> None:
+    """A user who is not an administrator cannot act on the Aula account."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    await _setup_integration(hass, mock_aula_client)
+    getattr(mock_aula_client, client_method).reset_mock()
+
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            service,
+            data,
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+            return_response=return_response,
+        )
+
+    getattr(mock_aula_client, client_method).assert_not_awaited()

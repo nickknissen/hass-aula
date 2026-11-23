@@ -694,27 +694,31 @@ async def _async_clear_attachments(call: ServiceCall) -> None:
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register the Aula actions."""
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_UPDATE_PRESENCE,
         _async_update_presence,
         schema=UPDATE_PRESENCE_SCHEMA,
     )
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_GET_THREAD_MESSAGES,
         _async_get_thread_messages,
         schema=GET_THREAD_MESSAGES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_MARK_THREAD_READ,
         _async_mark_thread_read,
         schema=MARK_THREAD_READ_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_DOWNLOAD_ATTACHMENT,
         _async_download_attachment,
