@@ -93,6 +93,8 @@ The following entities are created **per child**:
 
 ### Sensors
 
+Attributes holding text from school, such as messages, notifications, homework, weekly plans, reminders and loans, are not saved in the history database. The sensor values are.
+
 **Per child:**
 
 | Entity | Description |
@@ -467,6 +469,15 @@ Fired each time a **new** notification appears on your Aula account (checked eve
 | `event_type` | `string \| null` | Event type within the module |
 | `related_child_name` | `string \| null` | Name of the child this notification relates to |
 | `created_at` | `string \| null` | ISO timestamp of when the notification was created |
+
+Home Assistant saves events in its history database. To keep notification titles and child names out of it, exclude the event:
+
+```yaml
+recorder:
+  exclude:
+    event_types:
+      - hass_aula_notification
+```
 
 ---
 

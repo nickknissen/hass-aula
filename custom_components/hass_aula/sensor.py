@@ -214,6 +214,7 @@ class AulaNotificationsSensor(
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "unread_notifications"
+    _unrecorded_attributes = frozenset({"recent"})
 
     def __init__(
         self,
@@ -255,6 +256,7 @@ class AulaChildNotificationsSensor(
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "child_unread_notifications"
+    _unrecorded_attributes = frozenset({"recent"})
 
     def __init__(
         self,
@@ -307,6 +309,7 @@ class AulaLatestMessagesSensor(
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "latest_messages"
+    _unrecorded_attributes = frozenset({"messages"})
 
     def __init__(
         self,
@@ -358,6 +361,7 @@ class AulaLibraryLoansSensor(AulaEntity[AulaLibraryCoordinator], SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
     _attr_translation_key = "library_loans"
+    _unrecorded_attributes = frozenset({"loans"})
 
     def __init__(
         self,
@@ -409,6 +413,7 @@ class AulaMUTasksSensor(AulaEntity[AulaMUTasksCoordinator], SensorEntity):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "mu_tasks"
+    _unrecorded_attributes = frozenset({"tasks"})
 
     def __init__(
         self,
@@ -455,6 +460,7 @@ class AulaMUWeeklyNotesSensor(AulaEntity[AulaMUUgeplanCoordinator], SensorEntity
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
     _attr_translation_key = "mu_weekly_notes"
+    _unrecorded_attributes = frozenset({"notes", "next_week_notes"})
 
     def __init__(
         self,
@@ -506,6 +512,7 @@ class AulaEasyIQWeekplanSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "easyiq_weekplan"
+    _unrecorded_attributes = frozenset({"appointments"})
 
     def __init__(
         self,
@@ -566,6 +573,7 @@ class AulaEasyIQHomeworkSensor(AulaEntity[AulaEasyIQCoordinator], SensorEntity):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "easyiq_homework"
+    _unrecorded_attributes = frozenset({"homework"})
 
     def __init__(
         self,
@@ -616,6 +624,7 @@ class AulaMeebookWeekplanSensor(AulaEntity[AulaMeebookCoordinator], SensorEntity
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "meebook_weekplan"
+    _unrecorded_attributes = frozenset({"tasks", "next_week_tasks"})
 
     def __init__(
         self,
@@ -676,6 +685,7 @@ class AulaHuskelistenSensor(AulaEntity[AulaHuskelistenCoordinator], SensorEntity
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "huskelisten_reminders"
+    _unrecorded_attributes = frozenset({"reminders"})
 
     def __init__(
         self,
