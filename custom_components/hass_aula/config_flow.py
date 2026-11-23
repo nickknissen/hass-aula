@@ -43,7 +43,13 @@ from .const import (
     SUPPORTED_WIDGETS,
     TOKEN_CODE_LENGTH,
 )
-from .qr_view import AulaQRView, generate_animated_qr_svg
+from .qr_view import (
+    async_qr_url,
+    async_register_qr_view,
+    async_remove_qr_svg,
+    async_set_qr_svg,
+    generate_animated_qr_svg,
+)
 
 if TYPE_CHECKING:
     import qrcode
@@ -90,7 +96,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._qr_ready_event: asyncio.Event | None = None
         self._qr_svg: str | None = None
         self._httpx_client: httpx.AsyncClient | None = None
-        self._qr_view: AulaQRView | None = None
+        self._qr_view_registered: bool = False
         self._existing_entry: ConfigEntry | None = None
         self._is_reconfigure: bool = False
         self._available_widgets: list[WidgetConfiguration] = []
@@ -223,20 +229,18 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             )
             # Register the view BEFORE creating the auth task.
             # The task starts eagerly, so on_qr_codes fires synchronously during
-            # task creation — _qr_view must already exist at that point.
+            # task creation — the view must already be registered at that point.
             if uses_qr:
                 self._register_qr_view()
-                LOGGER.debug("QR view registered at /api/hass_aula/qr/%s", self.flow_id)
+                LOGGER.debug("QR view registered for flow %s", self.flow_id)
             self._identity_request = self.hass.loop.create_future()
             self._auth_task = self.hass.async_create_task(
                 self._async_authenticate(),
                 "hass_aula_mitid_auth",
             )
             LOGGER.debug(
-                "Auth task created. qr_svg set=%s, "
-                "qr_view has svg=%s, qr_ready_event set=%s",
+                "Auth task created. qr_svg set=%s, qr_ready_event set=%s",
                 self._qr_svg is not None,
-                self._qr_view is not None and self._qr_view._svg is not None,  # noqa: SLF001
                 self._qr_ready_event is not None and self._qr_ready_event.is_set(),
             )
 
@@ -360,14 +364,14 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
             LOGGER.debug("Submit pressed but auth not done yet, re-showing QR form")
 
         LOGGER.debug(
-            "Showing QR form: qr_url=/api/hass_aula/qr/%s, auth_done=%s",
+            "Showing QR form for flow %s, auth_done=%s",
             self.flow_id,
             self._auth_task.done() if self._auth_task else "no task",
         )
         return self.async_show_form(
             step_id="mitid_qr",
             data_schema=vol.Schema({}),
-            description_placeholders={"qr_url": f"/api/hass_aula/qr/{self.flow_id}"},
+            description_placeholders={"qr_url": async_qr_url(self.hass, self.flow_id)},
         )
 
     async def async_step_mitid_otp(
@@ -663,20 +667,18 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
         def on_qr_codes(qr1: qrcode.QRCode[Any], qr2: qrcode.QRCode[Any]) -> None:
             LOGGER.debug(
-                "on_qr_codes called: qr1=%s, qr2=%s, _qr_view=%s",
+                "on_qr_codes called: qr1=%s, qr2=%s, qr view registered=%s",
                 type(qr1).__name__,
                 type(qr2).__name__,
-                "set" if self._qr_view else "None",
+                self._qr_view_registered,
             )
             self._qr_svg = generate_animated_qr_svg(qr1, qr2)
             LOGGER.debug("QR SVG generated (%d bytes)", len(self._qr_svg))
-            if self._qr_view:
-                self._qr_view.update_svg(self._qr_svg)
+            if self._qr_view_registered:
+                async_set_qr_svg(self.hass, self.flow_id, self._qr_svg)
                 LOGGER.debug("QR SVG written to view")
             else:
-                LOGGER.warning(
-                    "on_qr_codes fired but _qr_view is None — SVG not served"
-                )
+                LOGGER.warning("on_qr_codes fired but the QR view is not registered")
             if self._qr_ready_event:
                 self._qr_ready_event.set()
                 LOGGER.debug("QR ready event set")
@@ -763,13 +765,14 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
         self._identities = []
 
     def _register_qr_view(self) -> None:
-        """Register a temporary HTTP view for serving the QR code SVG."""
-        self._qr_view = AulaQRView(self.flow_id)
-        self.hass.http.register_view(self._qr_view)
+        """Start serving this flow's QR code SVG."""
+        async_register_qr_view(self.hass)
+        self._qr_view_registered = True
 
     def _unregister_qr_view(self) -> None:
-        """Unregister the QR code HTTP view."""
-        self._qr_view = None
+        """Stop serving this flow's QR code SVG."""
+        self._qr_view_registered = False
+        async_remove_qr_svg(self.hass, self.flow_id)
 
     def async_abort(self, *, reason: str, **kwargs: Any) -> ConfigFlowResult:
         """Handle flow abort - clean up resources."""
@@ -778,6 +781,7 @@ class AulaFlowHandler(ConfigFlow, domain=DOMAIN):
 
     def async_remove(self) -> None:
         """Stop a login still running when the flow is closed."""
+        self._unregister_qr_view()
         # A login paused on the identity choice would otherwise wait forever.
         if self._auth_task and not self._auth_task.done():
             self._auth_task.cancel()
