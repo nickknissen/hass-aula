@@ -2,15 +2,54 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import KEY_HASS, HomeAssistantView
+from homeassistant.components.http.auth import async_sign_path
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.util.hass_dict import HassKey
 
-from .const import LOGGER
+from .const import DOMAIN, LOGGER
 
 if TYPE_CHECKING:
     import qrcode
+
+QR_PATH = "/api/hass_aula/qr/{flow_id}"
+QR_URL_EXPIRY = timedelta(minutes=10)
+DATA_QR_SVGS: HassKey[dict[str, str]] = HassKey(f"{DOMAIN}_qr_svgs")
+
+
+@callback
+def async_register_qr_view(hass: HomeAssistant) -> None:
+    """Register the QR view on first use; every flow shares it."""
+    if DATA_QR_SVGS in hass.data:
+        return
+    hass.data[DATA_QR_SVGS] = {}
+    hass.http.register_view(AulaQRView())
+
+
+@callback
+def async_set_qr_svg(hass: HomeAssistant, flow_id: str, svg: str) -> None:
+    """Serve ``svg`` as the QR code of ``flow_id``."""
+    hass.data[DATA_QR_SVGS][flow_id] = svg
+
+
+@callback
+def async_remove_qr_svg(hass: HomeAssistant, flow_id: str) -> None:
+    """Stop serving the QR code of ``flow_id``."""
+    hass.data.get(DATA_QR_SVGS, {}).pop(flow_id, None)
+
+
+@callback
+def async_qr_url(hass: HomeAssistant, flow_id: str) -> str:
+    """
+    Return a signed, expiring URL for the QR code of ``flow_id``.
+
+    The frontend loads it as a markdown image, which sends no auth header.
+    """
+    return async_sign_path(hass, QR_PATH.format(flow_id=flow_id), QR_URL_EXPIRY)
 
 
 def generate_animated_qr_svg(qr1: qrcode.QRCode[Any], qr2: qrcode.QRCode[Any]) -> str:
@@ -74,31 +113,21 @@ def _matrix_to_rects(
 class AulaQRView(HomeAssistantView):
     """Serve the animated QR code SVG for MitID authentication."""
 
-    requires_auth = False
-    cors_allowed = True
+    url = QR_PATH
+    name = "api:hass_aula:qr"
 
-    def __init__(self, flow_id: str) -> None:
-        """Initialize the QR view."""
-        self._flow_id = flow_id
-        self._svg: str | None = None
-        self.url = f"/api/hass_aula/qr/{flow_id}"
-        self.name = f"api:hass_aula:qr:{flow_id}"
-
-    def update_svg(self, svg: str) -> None:
-        """Update the SVG content."""
-        self._svg = svg
-
-    async def get(self, request: web.Request) -> web.Response:  # noqa: ARG002
+    async def get(self, request: web.Request, flow_id: str) -> web.Response:
         """Handle GET request for the QR code SVG."""
-        if self._svg is None:
-            LOGGER.warning("QR view GET %s — no SVG yet (returning 404)", self.url)
-            return web.Response(status=404, text="QR code not yet available")
+        svg = request.app[KEY_HASS].data.get(DATA_QR_SVGS, {}).get(flow_id)
+        if svg is None:
+            LOGGER.warning("QR view GET for flow %s: no SVG (returning 404)", flow_id)
+            return web.Response(status=404, text="QR code not available")
 
         LOGGER.debug(
-            "QR view GET %s — serving SVG (%d bytes)", self.url, len(self._svg)
+            "QR view GET for flow %s: serving SVG (%d bytes)", flow_id, len(svg)
         )
         return web.Response(
-            body=self._svg,
+            body=svg,
             content_type="image/svg+xml",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
