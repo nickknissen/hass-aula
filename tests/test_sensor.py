@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
 from aula import AulaConnectionError, AulaServerError
 from aula.models.presence import ActivityType, PresenceState
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.components.recorder import Recorder
+from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import JSONEncoder
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant.components.recorder.common import (
+    async_wait_recording_done,
+)
 
 from custom_components.hass_aula.const import (
     MAX_MESSAGE_ITEMS,
@@ -402,6 +408,46 @@ async def test_latest_messages_sensor_state_and_attributes(
     assert messages[0]["unread"] is True
     # Second thread is not in the unread list.
     assert messages[1]["unread"] is False
+
+
+async def test_message_and_notification_text_is_not_recorded(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_aula_client: AsyncMock,
+) -> None:
+    """School messages and notification titles stay out of the history database."""
+    from .conftest import mock_message, mock_message_thread
+
+    mock_aula_client.get_message_threads = AsyncMock(
+        return_value=[mock_message_thread(thread_id="1", subject="Skolefest")]
+    )
+    mock_aula_client.get_messages_for_thread = AsyncMock(
+        return_value=[mock_message(content="Kære forældre", sender="Anne Jensen")]
+    )
+
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
+
+    messages_id = "sensor.test_parent_latest_messages"
+    notifications_id = "sensor.test_parent_unread_notifications"
+    assert "messages" in hass.states.get(messages_id).attributes
+    assert "recent" in hass.states.get(notifications_id).attributes
+
+    history = await hass.async_add_executor_job(
+        get_significant_states,
+        hass,
+        dt_util.utcnow() - timedelta(hours=1),
+        None,
+        [messages_id, notifications_id],
+    )
+    [recorded_messages] = history[messages_id]
+    [recorded_notifications] = history[notifications_id]
+    assert recorded_messages.state == "1"
+    assert "messages" not in recorded_messages.attributes
+    assert "recent" not in recorded_notifications.attributes
 
 
 async def test_latest_messages_sensor_truncates_to_five(
