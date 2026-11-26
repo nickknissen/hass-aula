@@ -110,7 +110,8 @@
           "sleeping": "Sover",
           "spare_time_activity": "Til aktivitet",
           "physical_placement": "Fysisk placering",
-          "checked_out": "Gået"
+          "checked_out": "Gået",
+          "not_arrived": "Ikke mødt"
         }
       },
       "library_loans": {

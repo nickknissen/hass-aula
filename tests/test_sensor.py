@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,7 +33,10 @@ from custom_components.hass_aula.const import (
     WIDGET_MIN_UDDANNELSE_TASKS,
     WIDGET_MIN_UDDANNELSE_UGEPLAN,
 )
-from custom_components.hass_aula.sensor import MAX_ATTRIBUTE_ITEMS
+from custom_components.hass_aula.sensor import (
+    MAX_ATTRIBUTE_ITEMS,
+    PRESENCE_SENSOR_DESCRIPTION,
+)
 
 from .conftest import (
     make_config_entry,
@@ -106,6 +110,26 @@ async def test_presence_status_not_present(
     state = hass.states.get("sensor.test_child_presence_status")
     assert state is not None
     assert state.state == "not_present"
+
+
+def test_presence_options_cover_every_presence_state() -> None:
+    """Every state aula knows is an option, so a new one fails here, not in HA."""
+    options = PRESENCE_SENSOR_DESCRIPTION.options or []
+    assert sorted(options) == sorted(state.name.lower() for state in PresenceState)
+
+
+@pytest.mark.parametrize("language", ["strings", "translations/en", "translations/da"])
+def test_presence_options_have_state_names(language: str) -> None:
+    """Every option has a state name in each translation file."""
+    path = (
+        Path(__file__).parent.parent
+        / "custom_components/hass_aula"
+        / f"{language}.json"
+    )
+    names = json.loads(path.read_text(encoding="utf-8"))["entity"]["sensor"][
+        "presence_status"
+    ]["state"]
+    assert sorted(names) == sorted(PRESENCE_SENSOR_DESCRIPTION.options or [])
 
 
 async def test_presence_sensor_attributes(
@@ -317,6 +341,7 @@ async def test_all_presence_states(
         PresenceState.SPARE_TIME_ACTIVITY: "spare_time_activity",
         PresenceState.PHYSICAL_PLACEMENT: "physical_placement",
         PresenceState.CHECKED_OUT: "checked_out",
+        PresenceState.NOT_ARRIVED: "not_arrived",
     }
 
     for presence_state, expected_value in expected_states.items():
