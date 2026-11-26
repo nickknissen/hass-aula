@@ -370,11 +370,9 @@ def _message_preview(
     unread_ids: set[str],
 ) -> MessagePreview:
     """Shape a thread and its newest message into a MessagePreview."""
-    # TODO(aula-package): MessageThread does not expose its timestamp as a  # noqa: TD003, FIX002, E501
-    # public field. Add it to the aula package, then replace this _raw access.
-    thread_raw = thread._raw or {}  # noqa: SLF001
     sender: str | None = None
     sent_at: str | None = None
+    last_updated = thread.last_updated.isoformat() if thread.last_updated else None
     preview = ""
     has_attachments = False
 
@@ -394,7 +392,7 @@ def _message_preview(
         thread_id=thread.thread_id,
         subject=thread.subject,
         sender=sender,
-        date=sent_at or thread_raw.get("lastUpdatedDate"),
+        date=sent_at or last_updated,
         unread=thread.thread_id in unread_ids,
         preview=preview,
         has_attachments=has_attachments,

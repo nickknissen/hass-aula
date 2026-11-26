@@ -11,7 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aula import AulaAuthenticationError, AulaConnectionError
-from aula.auth.exceptions import NetworkError, OAuthError
+from aula.auth.exceptions import (
+    NetworkError,
+    OAuthError,
+    RateLimitedError,
+    TokenServerUnavailableError,
+)
 from homeassistant.core import HomeAssistant
 
 from custom_components.hass_aula.const import (
@@ -155,6 +160,12 @@ async def test_async_refresh_token_no_refresh_token(hass: HomeAssistant) -> None
             AulaConnectionError,
             "Token server unavailable",
         ),
+        (
+            RateLimitedError("Token server is rate limiting refresh requests"),
+            AulaConnectionError,
+            "rate limiting",
+        ),
+        (TokenServerUnavailableError(408), AulaConnectionError, "HTTP 408"),
     ],
 )
 async def test_async_refresh_token_error(
