@@ -110,7 +110,8 @@
           "sleeping": "Sleeping",
           "spare_time_activity": "Spare time activity",
           "physical_placement": "Physical placement",
-          "checked_out": "Checked out"
+          "checked_out": "Checked out",
+          "not_arrived": "Not arrived"
         }
       },
       "library_loans": {

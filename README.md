@@ -128,6 +128,7 @@ Attributes holding text from school, such as messages, notifications, homework, 
 | `spare_time_activity` | In a spare time activity |
 | `physical_placement` | Physical placement |
 | `checked_out` | Checked out |
+| `not_arrived` | Has not arrived |
 
 **Per profile (parent account):**
 

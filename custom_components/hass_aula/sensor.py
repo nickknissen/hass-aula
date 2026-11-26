@@ -59,6 +59,7 @@ PRESENCE_SENSOR_DESCRIPTION = SensorEntityDescription(
         "spare_time_activity",
         "physical_placement",
         "checked_out",
+        "not_arrived",
     ],
 )
 
