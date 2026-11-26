@@ -1,8 +1,8 @@
 # Aula Python Package API Reference
 
-> **Package:** `aula==1.22.0`
+> **Package:** `aula==1.24.0`
 > **Source:** `../aula` (relative to this repo)
-> **Last updated:** 2026-11-14
+> **Last updated:** 2026-11-26
 
 ---
 
@@ -587,7 +587,18 @@ class MessageThread(AulaDataClass):
     thread_id: str
     subject: str
     web_url: str | None   # set in __post_init__ (1.23.0); None without a thread_id
+    # keyword-only, all 1.24.0:
+    last_updated: datetime | None                  # latestMessage.sendDateTime
+    is_read: bool | None
+    is_sensitive: bool = False
+    latest_message: ThreadLatestMessage | None     # id: str, sent_at: datetime | None, text: str
+    regarding_children: list[ThreadChild]          # profile_id (= Child.profile_id), display_name
+    recipients: list[ThreadRecipient]              # full_name, short_name
 ```
+
+Since 1.24.0 `get_message_threads` builds threads with `MessageThread.from_dict`, so
+`thread_id` is a `str` there too; before, it was the API's `int`. A `getThreads` item has
+no `lastUpdatedDate` or `participants` key; use `last_updated` and `recipients`.
 
 ### MessageFolder
 
@@ -1350,7 +1361,10 @@ CHECK_IN = "check_in_dashboard"
 ```
 HttpRequestError                 — Base; any non-2xx response
 ├── AulaRejectedError            — Body status.code != 0 (1.17.0)
+├── AulaResponseError            — 2xx answer in an unexpected shape (1.24.0)
 ├── AulaAuthenticationError      — 401/403
+│   ├── AulaLoginRequiredError   — Stored tokens unusable; a MitID login is needed (1.24.0)
+│   ├── AulaRefreshTokenConflictError — Another process rotated the stored refresh token (1.24.0)
 │   ├── AulaSessionExpiredError  — Session expired (sub-code 23; 13 before 1.17.0)
 │   ├── AulaStepUpRequiredError  — Elevated auth required (sub-code 8)
 │   ├── AulaUserDeactivatedError — User account deactivated (sub-code 7)
@@ -1381,6 +1395,24 @@ reauth. A provider's 410 raises `HttpRequestError` and no longer bumps the Aula 
 server down, the request raises `AulaServerError` (5xx, or since 1.23.0 a maintenance redirect)
 or `AulaConnectionError` (unreachable).
 Before 1.20.0 the refresh quietly failed and the request raised `AulaAuthenticationError`.
+Since 1.24.0 a 429 raises `AulaRateLimitError` and a 408 `AulaServerError`; a refresh token
+the token server rejects raises `AulaLoginRequiredError`, with the original 401 as `__cause__`.
+
+**Unexpected answers (1.24.0):** `get_widget_token`, `get_daily_overview` and `get_profile`
+raise `AulaResponseError` when Aula answers in a shape they cannot read. A list method whose
+response has records, none of which parse, raises it too, naming the record type and count.
+When only some records fail they are skipped with a warning, and an empty response still
+returns `[]`. Before 1.24.0 these cases raised `KeyError`/`TypeError` or returned `[]`.
+
+**Shared token storage (1.24.0):** a client built with `token_storage` reads the storage before
+its automatic refresh. If the stored refresh token is not the one the client holds, it raises
+`AulaRefreshTokenConflictError` without calling the token server; it does the same when the
+token server rejects the refresh and the stored token has changed meanwhile. A client the
+integration has already replaced hits this when it refreshes late.
+
+**Refused refreshed sessions (1.24.0):** when Aula answers status code 10 on a client the
+package just refreshed by itself, the client starts a new session and retries once before it
+raises `AulaRejectedError`.
 
 **Error envelopes (1.13.0):** when an Aula API response is 2xx but its body
 carries a non-zero `status.code` (and no sub-code mapped to an auth error), the
@@ -1396,9 +1428,12 @@ before 1.17.0 it was the base `HttpRequestError` with only `(status code 10)`.
 ```
 MitIDAuthError                   — Base for MitID auth failures
 ├── MitIDError                   — MitID protocol errors
+│   ├── MitIDTimeoutError        — Nobody approved in the app within 5 minutes (1.24.0)
 │   ├── TokenInvalidError        — TOTP code rejected
 │   └── PasswordInvalidError     — MitID password rejected
 ├── NetworkError                 — Network failures during auth
+│   ├── TokenServerUnavailableError — Token server answered 408, 5xx or a redirect (1.24.0)
+│   └── RateLimitedError         — Token server answered 429 (1.24.0)
 ├── SAMLError                    — SAML protocol errors
 │   └── SecurityCheckError       — STIL's bot-defence gate blocked the login
 └── OAuthError                   — OAuth flow failures
@@ -1407,7 +1442,9 @@ MitIDAuthError                   — Base for MitID auth failures
 `MitIDAuthClient.refresh_access_token` raises `OAuthError` when the token server rejects the
 refresh token, and `NetworkError` when it is unreachable, answers with a 5xx (since 1.20.0) or
 redirects, as it does during Aula maintenance (since 1.23.0). Before that, a 5xx or a redirect
-was an `OAuthError`.
+was an `OAuthError`. Since 1.24.0 a 408 or 429 is a `NetworkError` too, as the
+`TokenServerUnavailableError` and `RateLimitedError` subclasses; before, both were an
+`OAuthError`, which hass-aula turned into a reauth.
 
 `SecurityCheckError` is **new in 1.10.0**: the login was diverted to
 `security-check.stil.dk`, which needs JavaScript and so cannot be answered by
@@ -1621,8 +1658,14 @@ async def authenticate(
     on_password: Callable | None = None,
     on_otp_code: Callable[[str], None] | None = None,
     on_qr_done: Callable[[], None] | None = None,
+    allow_login: bool = True,
 ) -> dict[str, Any]
 ```
+
+With `allow_login=False` (1.24.0) it raises `AulaLoginRequiredError` before any MitID request
+when the stored tokens cannot be used or refreshed. A 429 from the token server raises
+`AulaRateLimitError`, and with `token_storage` a refresh token rotated by another process
+raises `AulaRefreshTokenConflictError` instead of starting MitID.
 
 Handles cached tokens, refresh, and fresh MitID login. Returns token data dict. Applies a 60-second proactive expiry buffer (`_TOKEN_EXPIRY_BUFFER_SECS`) to prevent mid-request failures.
 
@@ -1665,8 +1708,8 @@ async def authenticate_and_create_client(
 ) -> AulaApiClient
 ```
 
-Convenience wrapper combining `authenticate()` + `create_client()`. Not in the
-top-level `__all__`, so import it from `aula.auth_flow`. When `create_client()`
+Convenience wrapper combining `authenticate()` + `create_client()`. Exported from `aula`
+since 1.24.0; before, import it from `aula.auth_flow`. When `create_client()`
 raises `AulaAuthenticationError`, it retries once with `force_login=True`. Since
 1.20.0 it also takes `force_login: bool = False` to log in through MitID even when
 the cached session still works.
@@ -1930,6 +1973,9 @@ from aula import (
     AulaRejectedError,                    # 1.17.0
     ProviderAuthenticationError,          # 1.20.0
     DownloadTooLargeError,                # 1.22.0
+    AulaResponseError, AulaLoginRequiredError,
+    AulaRefreshTokenConflictError,        # 1.24.0
+    authenticate_and_create_client,       # 1.24.0
     TerminalQRDisplay,                    # 1.19.0
     TokenStorage, FileTokenStorage,
     Profile, Child, DailyOverview, Message, MessageThread,

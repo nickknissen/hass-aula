@@ -284,18 +284,17 @@ def mock_notification(
 def mock_message_thread(
     thread_id: str = "1",
     subject: str = "Skolefest",
-    participants: list[str] | None = None,
     last_updated: str | None = "2026-08-10T07:00:00+00:00",
 ) -> MagicMock:
     """Create a mock MessageThread object."""
     thread = MagicMock(spec=MessageThread)
     thread.thread_id = thread_id
     thread.subject = subject
+    thread.last_updated = datetime.fromisoformat(last_updated) if last_updated else None
     thread._raw = {
         "id": thread_id,
         "subject": subject,
-        "participants": [{"name": n} for n in (participants or ["Anne Jensen"])],
-        "lastUpdatedDate": last_updated,
+        "latestMessage": {"sendDateTime": last_updated},
     }
     return thread
 
